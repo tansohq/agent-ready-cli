@@ -14,6 +14,7 @@ export function defineSignupTask({ id, name, url, docsHint = null, apiHost, netw
     instructions: {
       always: [
         "Work only inside the current directory. Do not touch other directories.",
+        "Command-line tools: `npm install -g`, `npx` and `pipx install` already put what they install under .tools/ in this directory. For a Python CLI without pipx, use a virtual environment at .tools/venv. When a CLI saves a login or config file in your home directory, run it with HOME=\"$PWD/.tools/home\" so the file stays here.",
         "Write PLAN.md first: which interface you will use, where you learned how to sign up and authenticate (URL), and the exact steps. Then act.",
         "Use the run id <runId> as the agent name, description, or account name wherever the product asks for one, so the account can be audited.",
         "Do not decide or state whether you succeeded. When you have done what you can, stop.",
@@ -21,6 +22,7 @@ export function defineSignupTask({ id, name, url, docsHint = null, apiHost, netw
       withCredential: [],
       signup: [
         `You have no credential. Obtain one yourself using only what the product's own pages${docsHint ? ` (start at ${docsHint})` : ""} and your inbox give you. If the product offers a signup path meant for agents, prefer it; your persona email is the human contact address if one is required.`,
+        "The check is one call made with the credential the product gave you (an API key, token or identity assertion), so save that credential even when the task itself is done. If a CLI stored it in a config file instead of printing it, read it from that file.",
         `When you have a credential, write it to CREDENTIAL.env as ${[credentialEnvName, ...extraFields].map((f) => `${f}=<value>`).join(" and ")} (one per line) and nowhere else, then make one authenticated read call with it and record the request and response status in RESULT.md.`,
         ...(emailNote ? [emailNote] : []),
         ...extraInstructions,

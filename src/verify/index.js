@@ -17,6 +17,8 @@ export const KEY_ENV = "AGENT_READY_KEY";
 // assertion is exchanged for an access token.
 const CALL = /^(?:(GET|POST)\s+)?(https?:\/\/\S+)$/i;
 const FIELD_NAME = /^[A-Z][A-Z0-9_]*$/;
+const REGISTRY_HOSTS = { npm: ["registry.npmjs.org"], pypi: ["pypi.org", "files.pythonhosted.org"] };
+
 export function parseVerifySpec(config) {
   const callText = (config?.verify_call || "").trim();
   if (!callText) return { error: "agent-ready.yml has no verify_call. Add the call that proves a key works, for example: verify_call: GET https://api.example.com/v1/me" };
@@ -44,7 +46,12 @@ export function parseVerifySpec(config) {
   const hosts = (config.verify_hosts || "").split(/[\s,]+/).filter(Boolean);
   const badHost = hosts.find((h) => !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(h));
   if (badHost) return { error: `verify_hosts must be host names like registry.npmjs.org, not "${badHost}"` };
-  return { method: (match[1] || "GET").toUpperCase(), url: match[2], body: config.verify_body || null, header: { name: header.slice(0, colon).trim(), template: header.slice(colon + 1).trim() }, expect, assert, fields, exchange, hosts };
+  // verify_cli: the package registries the agent may install the product's CLI from, by name.
+  const registries = (config.verify_cli || "").split(/[\s,]+/).filter(Boolean);
+  const badRegistry = registries.find((r) => !REGISTRY_HOSTS[r]);
+  if (badRegistry) return { error: `verify_cli must be ${Object.keys(REGISTRY_HOSTS).join(" or ")}, not "${badRegistry}"` };
+  for (const r of registries) hosts.push(...REGISTRY_HOSTS[r]);
+  return { method: (match[1] || "GET").toUpperCase(), url: match[2], body: config.verify_body || null, header: { name: header.slice(0, colon).trim(), template: header.slice(colon + 1).trim() }, expect, assert, fields, exchange, hosts, cli: registries };
 }
 
 export function describeSpec(spec) {

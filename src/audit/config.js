@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 // agent-ready.yml at the repo root: the answers to the onboarding questions, committed so CI and later runs reuse them.
 // Flat keys only, so it is read with a line parser rather than a YAML dependency.
 export const CONFIG_FILE = "agent-ready.yml";
-const KEYS = ["url", "task", "onboarding", "abuse_cost", "human_before", "verify_call", "verify_header", "verify_expect", "verify_assert", "verify_fields", "verify_body", "verify_exchange", "verify_exchange_body", "verify_exchange_token", "verify_hosts"];
+const KEYS = ["url", "task", "onboarding", "abuse_cost", "human_before", "verify_call", "verify_header", "verify_expect", "verify_assert", "verify_fields", "verify_body", "verify_exchange", "verify_exchange_body", "verify_exchange_token", "verify_hosts", "verify_cli"];
 
 export function readConfig(path) {
   if (!existsSync(path)) return null;
@@ -36,10 +36,12 @@ export function writeConfig(path, { url, task, answers }) {
         "# verify_exchange: POST https://api.example.com/oauth/token   # trade the key for a token first",
         "# verify_exchange_body: grant_type=client_credentials&assertion={key}",
         "# verify_exchange_token: access_token   # where the token is in the exchange's JSON reply",
+        "# verify_cli: npm               # let the agent install the product's CLI from npm (or pypi)",
         "# verify_hosts: auth.example-cloud.com  # more hosts the agent may reach, comma separated",
         "#",
         "# The agent saves its key as AGENT_READY_KEY (and each verify_fields name) in work/CREDENTIAL.env;",
-        "# the task does not need to say so. Run `agent-ready verify --check` to see the plan before a real run.",
+        "# the task does not need to say so, but should name which value is the key when the product returns several.",
+        "# Run `agent-ready verify --check` to see the plan before a real run.",
       ];
   const lines = [
     "# agent-ready: how agents should onboard to this product. Edit and commit.",

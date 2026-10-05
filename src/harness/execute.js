@@ -75,11 +75,14 @@ export function sourcesFrom(events) {
 // Agent-written files are part of the record but not part of the trace boundary: scrub them after the run so a key
 // the agent copied into a file never persists. The scrub is recorded.
 // Subfolders too: inbox/ holds the product's emails, with their sign-in and claim links.
+// Installed packages and download caches under .tools/ are not the agent's writing and are skipped; .tools/home,
+// where a CLI saves its login, is scrubbed like everything else.
+const UNSCRUBBED = new Set(["node_modules", ".git", join(".tools", "cache"), join(".tools", "npm-global"), join(".tools", "pipx"), join(".tools", "venv")]);
 function scrubWorkDir(workDir, redact, scrubbed = [], base = workDir) {
   for (const name of readdirSync(workDir)) {
     const p = join(workDir, name);
     if (statSync(p).isDirectory()) {
-      if (name !== "node_modules" && name !== ".git") scrubWorkDir(p, redact, scrubbed, base);
+      if (!UNSCRUBBED.has(name) && !UNSCRUBBED.has(relative(base, p))) scrubWorkDir(p, redact, scrubbed, base);
       continue;
     }
     // CREDENTIAL.env is read raw by the evaluator and overwritten by the harness afterwards; never scrub it here.
@@ -92,6 +95,22 @@ function scrubWorkDir(workDir, redact, scrubbed = [], base = workDir) {
     }
   }
   return scrubbed;
+}
+
+// Command-line tools the agent installs, and their caches, go under .tools/ in the run folder, the only place the
+// sandbox lets it write. Node's fetch ignores the sandbox's proxy unless NODE_USE_ENV_PROXY is set (Node 22.21 and
+// 24 or later): without it a CLI built on fetch fails with ENOTFOUND, as Mem0's did in a real run.
+export function toolEnv(workDir, path = process.env.PATH) {
+  const tools = join(workDir, ".tools");
+  return {
+    NODE_USE_ENV_PROXY: "1",
+    npm_config_cache: join(tools, "cache", "npm"),
+    npm_config_prefix: join(tools, "npm-global"),
+    PIP_CACHE_DIR: join(tools, "cache", "pip"),
+    PIPX_HOME: join(tools, "pipx"),
+    PIPX_BIN_DIR: join(tools, "bin"),
+    PATH: [join(tools, "npm-global", "bin"), join(tools, "bin"), path].join(":"),
+  };
 }
 
 export async function execute({ task, runId, doc, workDir, credentials, mode, persona = null, executorName = claudePrint.name, maxTurns = 40, maxBudgetUsd = null, model = null, afterRun = async () => ({}), log = () => {} }) {
@@ -109,7 +128,8 @@ export async function execute({ task, runId, doc, workDir, credentials, mode, pe
     events.push(entry);
     log(entry);
   };
-  const run = await executor.run({ prompt, workDir, childEnv: credentials.childEnv, tools: EXECUTOR_TOOLS, network: task.network, maxTurns, maxBudgetUsd, model, redact: credentials.redact, learn: credentials.learn, onEvent, allowedEmails: persona?.email ? [persona.email] : [] });
+  const childEnv = { ...credentials.childEnv, ...toolEnv(workDir, credentials.childEnv.PATH) };
+  const run = await executor.run({ prompt, workDir, childEnv, tools: EXECUTOR_TOOLS, network: task.network, maxTurns, maxBudgetUsd, model, redact: credentials.redact, learn: credentials.learn, onEvent, allowedEmails: persona?.email ? [persona.email] : [] });
   const extra = await afterRun();
 
   // If the agent acquired a key, learn its value now so everything written from here on is scrubbed of it.

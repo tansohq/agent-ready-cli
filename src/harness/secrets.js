@@ -22,7 +22,8 @@ const GENERIC = [
 const SECRET_FIELD = /\\?"((?:[a-z]+_)*(?:api_?key|key|token|secret|password|claim_?code|claim_?url|verification_code|client_secret)|apiKey|accessToken|refreshToken|claimCode|claimUrl|clientSecret)\\?"\s*:\s*\\?"([^"\\\s]{8,})\\?"/gi;
 // The same for links: a one-time sign-in or claim link carries its secret as a URL parameter (Telnyx's emails had
 // ?token=…, Cosmic's ?token=agk_…). Values shorter than 12 characters are left alone so page numbers survive.
-const SECRET_PARAM = /[?&](token|code|key|claim|claim_token|otp|signature|sig|auth|magic|access_token|portal_redirect_token)=([^&\s"'<>\\]{12,})/gi;
+// Any parameter named like a token counts: Cloudflare's temporary-account claim link is ?claimToken=….
+const SECRET_PARAM = /[?&](\w*token|code|key|claim|otp|signature|sig|auth|magic)=([^&\s"'<>\\]{12,})/gi;
 // And connection strings: postgres://user:password@host carries its password in the URL (Neon returned one as
 // database_url, a field name that says nothing about secrets).
 const URL_PASSWORD = /\b([a-z][a-z0-9+.-]{1,20}:\/\/[^\s:/@"'\\]+:)([^\s@"'\\/]{4,})@/gi;

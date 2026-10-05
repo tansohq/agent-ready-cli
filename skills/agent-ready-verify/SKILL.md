@@ -28,9 +28,10 @@ Optional lines, only when the product needs them:
 - `verify_fields: PROJECT_ID`: values the agent saves next to its key, filled into `{PROJECT_ID}` in the call.
 - `verify_body`: a request body; use `POST` in `verify_call`. A body starting with `{` is sent as JSON, anything else as a form.
 - `verify_exchange: POST <url>`, `verify_exchange_body` (use `{key}`) and `verify_exchange_token` (where the token is in the reply): trade the key for a token before the call.
-- `verify_hosts: a.example.com, b.example.com`: more hosts the agent may reach. By default it may reach only the product's own domain, its usual subdomains and the hosts in `verify_call` and `verify_exchange`.
+- `verify_cli: npm` (or `pypi`): lets the agent install the product's CLI from that registry. Use it when the product's docs tell agents to start with a CLI, and still check the key with an HTTP call.
+- `verify_hosts: a.example.com, b.example.com`: more hosts the agent may reach. By default it may reach only the product's own domain, its usual subdomains the hosts in `verify_call` and `verify_exchange`, and the registries in `verify_cli`.
 
-Do not tell the agent where to save its key in `task`. The run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`.
+Do not tell the agent where to save its key in `task`; the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`. When the product hands back several secrets, do say in `task` which one the check uses, such as "the identity assertion is the key".
 
 ## 2. Check the plan (free)
 

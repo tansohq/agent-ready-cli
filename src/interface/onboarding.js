@@ -27,12 +27,20 @@ const SIGNALS = {
   // Case-sensitive: an "agentId" field is an id, not AgentID.
   agentIdentity: /\bAgentID\b|\b[Vv]erified agent identity\b|\b[Aa]gent identity (?:token|assertion|provider)\b|\b[Aa]gent[- ]verified (?:identity|registration|sign-?in)\b/,
   // A person has to set access up before the agent starts.
-  humanFirst: /\bmanage (?:your )?API keys? (?:at|in|from|on)\b|\b(?:generate|get|find|create) (?:an |your )?API key (?:in|from|at|on) (?:the |your )?(?:dashboard|console|portal|settings|account)\b|\bcreate (?:an |your )?API key (?:in|from) (?:the |your )?(?:dashboard|console|portal)\b|\b(?:sign|log) ?in to (?:the |your )?(?:dashboard|console|portal)\b|\blink (?:your|a) (?:Stripe )?account\b|\btell the user to complete sign-?in\b|\bbrowser was opened for authentication\b/i,
+  // A token a person creates counts the same way: GitHub's "personal access token", Vercel's "create a token on the
+  // tokens page", Neon's "authenticate with a Neon API key".
+  humanFirst: /\bpersonal access tokens?\b|\bcreate (?:a |an )?(?:new )?(?:access |API )?token (?:on|in|from) (?:the |your )?(?:\w+ )?(?:tokens? page|dashboard|settings|account settings|console)\b|\bauthenticate (?:with|using) (?:a |an |your )?(?:[A-Z]\w+ )?API key\b|\bmanage (?:your )?API keys? (?:at|in|from|on)\b|\b(?:generate|get|find|create) (?:an |your )?API key (?:in|from|at|on) (?:the |your )?(?:dashboard|console|portal|settings|account)\b|\bcreate (?:an |your )?API key (?:in|from) (?:the |your )?(?:dashboard|console|portal)\b|\b(?:sign|log) ?in to (?:the |your )?(?:dashboard|console|portal)\b|\blink (?:your|a) (?:Stripe )?account\b|\btell the user to complete sign-?in\b|\bbrowser was opened for authentication\b/i,
   // A request is paid for in the request itself. A bare 402 is not this: products also
   // use it to mean "claim first" (Cosmic) or "over your plan" (Inkbox).
   payPerRequest: /\bx402\b|\bX-PAYMENT\b|\bPAYMENT-REQUIRED\b/,
   // The documented way in is a command-line tool rather than an HTTP call.
   cliBootstrap: /\b(?:npx|wrangler|mem0|stripe|npm i(?:nstall)?|pip install|brew install)\b[^\n]{0,60}(?:--temporary|--agent|\binit\b|\bsign-?up\b|projects init)/i,
+  // The product's CLI takes a token without a browser, so an agent can run it unattended once a person has made the
+  // token: Vercel's "Set the VERCEL_TOKEN environment variable" or "Pass the --token option", GitHub's "--with-token".
+  // An environment variable counts only where the text calls it one: code samples are full of other _API_KEY names.
+  cliToken: /--with-token\b|\b[Pp]ass the --(?:token|api-key) (?:option|flag)\b|\b[A-Z][A-Z0-9]*_(?:TOKEN|API_KEY|ACCESS_TOKEN)\b environment variable|\benvironment variables? (?:named |called )?\b[A-Z][A-Z0-9]*_(?:TOKEN|API_KEY|ACCESS_TOKEN)\b/,
+  // The CLI signs in through a browser: a person has to be at the machine once.
+  cliBrowserLogin: /\bweb-based browser flow\b|\blaunches a browser\b|\bbrowser window where you (?:authorize|log in|sign in)\b|\brequires manual input\b/i,
   httpBootstrap: /\bPOST\s+(?:https?:\/\/\S+)?\/\S*(?:sign-?up|register|agents?)\b|curl -X POST \S*(?:sign-?up|register|agents?)/i,
 };
 
@@ -170,8 +178,11 @@ export function detectOnboarding(doc, bodies) {
   if (has("payPerRequest")) patterns.push(pattern("pay_per_request", found, ["payPerRequest"], "The docs describe paying per request over HTTP 402, with no account needed first."));
 
   const schemes = (doc.authentication?.methods || []).filter((m) => ["apiKey", "http", "oauth2"].includes(m.type));
-  if (has("humanFirst") || schemes.length) {
-    const p = pattern("existing_account", found, ["humanFirst"], has("humanFirst") ? "The docs describe a person creating access (an account, key or payment method) that the agent then uses." : "The API declares credentials in its spec, which an agent can use once a person has created them.");
+  if (has("humanFirst") || has("cliToken") || schemes.length) {
+    const reason = has("cliToken") ? "The docs describe a person creating a token that the agent then passes to the CLI with a flag or an environment variable, with no browser." : has("humanFirst") ? "The docs describe a person creating access (an account, key or payment method) that the agent then uses." : "The API declares credentials in its spec, which an agent can use once a person has created them.";
+    const p = pattern("existing_account", found, ["humanFirst", "cliToken"], reason);
+    // How the agent's CLI gets signed in, when the docs say: "token" runs unattended, "browser" needs a person once.
+    p.cli = has("cliToken") ? "token" : has("cliBrowserLogin") ? "browser" : null;
     if (!p.evidence.length) {
       p.evidence = schemes.flatMap((m) => m.evidence || []).slice(0, EVIDENCE_PER_SIGNAL);
       p.status = "documented";

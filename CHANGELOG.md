@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0 (2026-10-05)
+
+- `audit` recognizes a token a person creates that the product's CLI then takes from a flag or an environment variable ("Set the VERCEL_TOKEN environment variable", "use --with-token to pass in a personal access token"), and a CLI that signs in only through a browser. GitHub and Vercel had scored "needs a person" for Sign up and Access because their docs never say "API key in the dashboard"; both now read as a handoff, 5 of 7. Across the 25 products in the October sweep, no other verdict changed.
+- `verify` can test products whose agents start with a CLI. `verify_cli: npm` (or `pypi`) lets the agent install from that registry. Installs, caches and saved CLI logins go under `.tools/` in the run folder, the only place the agent's sandbox can write, and saved logins are scrubbed. Node's `fetch` now goes through the sandbox's proxy (`NODE_USE_ENV_PROXY=1`): without it, any CLI built on `fetch` failed with `ENOTFOUND`.
+- Real runs through each product's own CLI, all passing the three-call check: Mem0 with `mem0 init --agent` (18 turns, $0.16), Neon with `neon init -y --claimable` (18 turns, $0.17) and Cloudflare with `wrangler deploy --temporary` (24 turns, $0.22). Each CLI saved its credential under `.tools/home`, and the agent read it from there. The first Neon and Cloudflare runs used the CLI correctly but saved no key, because their tasks did not say which value was the key; the agent's instructions now say to save the credential even when a CLI keeps it in a file, and the docs say to name the key in `task` when a product returns several secrets.
+- A claim link in the form `?claimToken=…` (Cloudflare's temporary accounts) was not scrubbed from the agent's notes. Any link parameter named like a token is now treated as a secret.
+- Correction to 0.1.7: the Mem0 run did not pass through Mem0's CLI. The CLI installed, `mem0 init --agent` failed with "fetch failed" (the proxy problem above), and the agent then signed up over HTTP. The pass itself stands.
+
 ## 0.1.9 (2026-10-05)
 
 - Two skills replace the old one, which taught agents the hidden `scan` and `crash` commands instead of `audit` and `verify`. `agent-ready` runs the audit; `agent-ready-verify` runs a real agent and, in Claude Code, starts only when you type `/agent-ready-verify`. In fresh Claude Code sessions, "audit neon.com with agent-ready" ran the audit (5 turns, $0.03), "run agent-ready verify on neon.com" showed the plan and pointed to `/agent-ready-verify` without starting a run, and `/agent-ready-verify neon.com` stopped at the plan to ask for a yes.

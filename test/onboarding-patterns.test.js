@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { buildInterface } from "../src/interface/index.js";
+import { inspect } from "../src/audit/index.js";
 
 // Each agent-first product, recorded from its live public pages (scripts/record-onboarding-fixtures.mjs), must be
 // recognised as the onboarding pattern its own docs describe. The expected labels come from reading those docs, not
@@ -102,4 +103,46 @@ test("\"manage your API keys at …\" reads as a person setting up access first"
   const fetchSource = async (url) => (pages[url] ? { ok: true, status: 200, url, contentType: url.endsWith(".txt") ? "text/plain" : "text/html", headers: {}, text: pages[url] } : { ok: false, status: 404, url, contentType: "text/html", headers: {}, text: "" });
   const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource });
   assert.ok(onboarding.patterns.some((p) => p.id === "existing_account"), onboarding.patterns.map((p) => p.id).join(", "));
+});
+
+// A product whose CLI takes a token a person made: the agent runs it unattended. The quotes are from the live docs,
+// read 2026-10-05: Vercel's CLI page, GitHub's Copilot CLI setup and `gh auth login` manual.
+const llmsOnly = (text) => {
+  const pages = { "https://acme.dev/": "<html><head><title>Acme</title></head><body>Acme</body></html>", "https://acme.dev/llms.txt": `# Acme\n\n${text}\n` };
+  return async (url) => (pages[url] ? { ok: true, status: 200, url, contentType: url.endsWith(".txt") ? "text/plain" : "text/html", headers: {}, text: pages[url] } : { ok: false, status: 404, url, contentType: "text/html", headers: {}, text: "" });
+};
+const CLI_TOKEN = [
+  "In an environment where manual input is not possible, you can create a token on your tokens page and then authenticate using one of these methods: Set the VERCEL_TOKEN environment variable Pass the --token option to the command",
+  "Use the COPILOT_GITHUB_TOKEN , GH_TOKEN , or GITHUB_TOKEN environment variable (in order of precedence).",
+  "The default authentication mode is a web-based browser flow. Alternatively, use --with-token to pass in a personal access token (classic) on standard input.",
+];
+for (const quote of CLI_TOKEN) {
+  test(`"${quote.slice(0, 40)}…" reads as a person making a token the agent's CLI uses`, async () => {
+    const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+    const existing = onboarding.patterns.find((p) => p.id === "existing_account");
+    assert.ok(existing, onboarding.patterns.map((p) => p.id).join(", "));
+    assert.equal(existing.cli, "token");
+    assert.match(existing.reason, /flag or an environment variable/);
+  });
+}
+
+test("a CLI that signs in only through a browser is a handoff that says so", async () => {
+  const quote = "The command launches a browser window where you authorize the Neon CLI to access your Neon account. You can also authenticate with a Neon API key instead.";
+  const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+  assert.equal(onboarding.patterns.find((p) => p.id === "existing_account")?.cli, "browser");
+});
+
+// Names in code samples are not the product's CLI reading a token, and "log in" in prose is not a browser login.
+test("an _API_KEY in a code sample or a mention of logging in is not read as CLI access", async () => {
+  const quote = "export OPENAI_API_KEY=sk-test-123\nnode index.js\n\nYou will need to log in to see your projects.";
+  const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+  assert.deepEqual(onboarding.patterns.map((p) => p.id), []);
+});
+
+test("the audit's Sign up and Access steps say the agent's CLI takes the token", async () => {
+  const { funnel } = await inspect({ url: "https://acme.dev/", version: "test", runId: "r", fetchSource: llmsOnly(CLI_TOKEN[0]) });
+  const steps = Object.fromEntries(funnel.steps.map((s) => [s.id, s]));
+  assert.equal(steps.signup.state, "handoff");
+  assert.match(steps.signup.reason, /CLI takes the token from a flag or an environment variable/);
+  assert.equal(steps.access.state, "handoff");
 });

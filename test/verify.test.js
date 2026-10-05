@@ -81,6 +81,15 @@ describe("verify: the declared call", () => {
     assert.match(parseVerifySpec({ verify_call: "GET https://x.dev/me", verify_hosts: "https://evil.dev/path" }).error, /host names/);
   });
 
+  it("verify_cli opens a package registry by name so the agent can install the product's CLI", () => {
+    const npm = parseVerifySpec({ verify_call: "GET https://api.vercel.com/v2/user", verify_cli: "npm" });
+    assert.deepEqual(npm.cli, ["npm"]);
+    assert.ok(networkFor("https://vercel.com/", npm).includes("registry.npmjs.org"));
+    const both = networkFor("https://acme.dev/", parseVerifySpec({ verify_call: "GET https://api.acme.dev/me", verify_cli: "npm, pypi" }));
+    for (const h of ["registry.npmjs.org", "pypi.org", "files.pythonhosted.org"]) assert.ok(both.includes(h), h);
+    assert.match(parseVerifySpec({ verify_call: "GET https://x.dev/me", verify_cli: "brew" }).error, /verify_cli must be npm or pypi, not "brew"/);
+  });
+
   it("lets the agent reach the product, its usual subdomains and the API host", () => {
     const hosts = networkFor("https://acme.dev/", { url: "https://api.acme-cloud.com/v1/me" });
     for (const h of ["acme.dev", "api.acme.dev", "docs.acme.dev", "api.acme-cloud.com"]) assert.ok(hosts.includes(h), h);
@@ -282,6 +291,7 @@ describe("verify: what the agent inherits and what stays on disk", () => {
   it("finds one-time tokens in links, not short page numbers", () => {
     assert.deepEqual(secretsInText("Sign in: https://portal.telnyx.com/#/login?portal_redirect_token=01a10ce9-306e-7bd8&next=1"), ["01a10ce9-306e-7bd8"]);
     assert.deepEqual(secretsInText("https://example.com/docs?page=2&code=abc"), []);
+    assert.deepEqual(secretsInText("Claim URL: https://dash.cloudflare.com/claim-preview?claimToken=7pnQXexampleexampleAAAA"), ["7pnQXexampleexampleAAAA"]);
   });
 
   it("scrubs sign-in links from the emails in inbox/ after the run", async () => {
@@ -304,6 +314,35 @@ describe("verify: what the agent inherits and what stays on disk", () => {
       assert.match(mail, /noreply@example\.dev/);
     } finally {
       delete EXECUTORS["fake-mail"];
+    }
+  });
+
+  it("CLI installs and logins stay in the run folder, and a saved login is scrubbed", async () => {
+    let env = null;
+    EXECUTORS["fake-cli"] = {
+      name: "fake-cli",
+      run: async ({ workDir, childEnv }) => {
+        env = childEnv;
+        writeFileSync(join(workDir, "PLAN.md"), PLAN);
+        writeFileSync(join(workDir, "CREDENTIAL.env"), `AGENT_READY_KEY=${GOOD}\n`);
+        mkdirSync(join(workDir, ".tools", "home", ".acme"), { recursive: true });
+        writeFileSync(join(workDir, ".tools", "home", ".acme", "config.json"), JSON.stringify({ api_key: GOOD }));
+        const now = new Date().toISOString();
+        return { executor: { name: "fake-cli" }, startedAt: now, finishedAt: now, exitCode: 0, stoppedBecause: "success", turns: 2, costUsd: 0.01, stderr: null, rawTrace: null };
+      },
+    };
+    try {
+      const spec = parseVerifySpec({ verify_call: `GET ${site.base}/v1/me`, verify_cli: "npm" });
+      const out = mkdtempSync(join(tmpdir(), "verify-cli-tools-"));
+      await runHarness({ taskModule: buildVerifyTask({ url: `${site.base}/`, task: "Sign up", spec }), runId: "run_c", outDir: out, version: "test", mode: "signup", noInbox: true, executorName: "fake-cli", maxTurns: 2 });
+      const work = join(out, "work");
+      assert.equal(env.NODE_USE_ENV_PROXY, "1");
+      assert.equal(env.npm_config_prefix, join(work, ".tools", "npm-global"));
+      assert.ok(env.PATH.startsWith(join(work, ".tools", "npm-global", "bin")));
+      assert.doesNotMatch(readFileSync(join(work, ".tools", "home", ".acme", "config.json"), "utf8"), new RegExp(GOOD));
+      assert.match(readFileSync(join(work, "prompt.md"), "utf8"), /HOME="\$PWD\/\.tools\/home"/);
+    } finally {
+      delete EXECUTORS["fake-cli"];
     }
   });
 
@@ -454,6 +493,9 @@ describe("verify: command", () => {
     assert.equal(config.verify_exchange_token, "access_token");
     assert.equal(config.verify_fields, "PROJECT_ID");
     assert.equal(config.verify_exchange_body, "grant_type=x&assertion={key}");
+    writeFileSync(path, readFileSync(path, "utf8") + "verify_cli: npm\n");
+    writeConfig(path, { url: "neon.com", task: "Sign up", answers: { onboarding: { value: "try_then_claim" }, abuse_cost: { value: "low" }, human_before: { value: "never" } } });
+    assert.equal(readConfig(path).verify_cli, "npm");
   });
 
   it("re-answering the audit questions keeps the verify lines the user filled in", () => {

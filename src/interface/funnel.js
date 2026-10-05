@@ -89,6 +89,8 @@ function signup(doc) {
   const refs = (p) => (p?.evidence || []).map((e) => e.obs);
   if (self && self.needs.length) return step("signup", "agent_can", `The docs describe an agent signing up on its own (${self.name}). It needs: ${self.needs.join(", ")}.`, refs(self));
   if (self) return step("signup", "agent_can", `The docs describe an agent signing up on its own (${self.name}).${self.humanBoundary ? ` A person steps in ${self.humanBoundary.charAt(0).toLowerCase()}${self.humanBoundary.slice(1)}` : ""}`, refs(self));
+  if (existing?.cli === "token") return step("signup", "handoff", "A person creates the account and a token. The agent's CLI takes the token from a flag or an environment variable, with no browser.", refs(existing));
+  if (existing?.cli === "browser") return step("signup", "handoff", "A person creates the account and signs the CLI in through a browser; no token option was found in the pages read. The agent carries on from there.", refs(existing));
   if (existing) return step("signup", "handoff", "A person creates the account and gives the agent a key. The agent carries on from there.", refs(existing));
   return step("signup", "needs_person", "No way for an agent to sign up was found in the pages read. A person may have to create the account; only a real agent run can confirm.");
 }

@@ -71,7 +71,7 @@ Commit `agent-ready.yml` so CI reuses your answers. `verify` can run in CI with 
 ## Limits
 
 - **`audit`** sends GET requests only: at most 36 per run (well-known paths such as `/llms.txt`, plus at most 14 links it follows from your pages), all on your product's own registrable domain, so docs on another domain are not read. Each request times out after 10 seconds and reads at most 2 MB. It does not run JavaScript, so a page that renders only in the browser reads as empty, and it cannot see anything behind a login. Steps found in page text can be wrong; only a real agent run verifies a step.
-- **`verify`** gives the agent 40 turns (`--max-turns`) and $5 of model use (`--max-budget-usd`). A run is stopped after 30 minutes, or after 5 minutes with no output. The agent can reach only your product's own domain and its usual subdomains (`www`, `api`, `docs`, `app`, `auth`, `console`, `dashboard`, `developers`), the hosts in `verify_call` and `verify_exchange`, and anything in `verify_hosts`. It can use Bash, WebFetch and file tools, not a browser, so a signup that works only in a browser (a form that needs JavaScript, or a CAPTCHA) stops it. One run is one attempt; results can differ between runs.
+- **`verify`** gives the agent 40 turns (`--max-turns`) and $5 of model use (`--max-budget-usd`). A run is stopped after 30 minutes, or after 5 minutes with no output. The agent can reach only your product's own domain and its usual subdomains (`www`, `api`, `docs`, `app`, `auth`, `console`, `dashboard`, `developers`), the hosts in `verify_call` and `verify_exchange`, the registries in `verify_cli`, and anything in `verify_hosts`. It can use Bash, WebFetch and file tools, not a browser, so a signup that works only in a browser (a form that needs JavaScript, or a CAPTCHA) stops it. One run is one attempt; results can differ between runs.
 
 ## Audit your product
 
@@ -173,9 +173,23 @@ verify_exchange_token: access_token
 verify_assert: database_url
 ```
 
-- `verify_hosts` lists hosts the agent may reach beyond the product's own, such as a CLI's package registry (`registry.npmjs.org`).
+- `verify_cli: npm` (or `pypi`, or both) lets the agent install the product's command-line tool from that registry. A CLI that downloads more while it installs, such as a binary from GitHub releases, needs those hosts in `verify_hosts` too.
+- `verify_hosts` lists other hosts the agent may reach beyond the product's own, such as a second dashboard domain.
 
-You don't tell the agent where to save its key: the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`, and the checker reads them from there. Before the real run, `verify --check` shows what it would do without starting the agent or sending a request to your product: whether Claude Code is installed and signed in, the hosts the agent may reach, the inbox, what the agent saves, and the calls the checker makes. It exits `0` when ready and `2` when not.
+**A product whose agents start with its CLI.** Write the task the way your docs tell an agent to start, add `verify_cli`, and check the key over your HTTP API: a token the CLI uses is usually the same token the API takes. Cloudflare passed this way through `wrangler deploy --temporary` (24 turns, $0.22), and Mem0 (`mem0 init --agent`) and Neon (`neon init --claimable`) through their CLIs too:
+
+```yaml
+url: cloudflare.com
+task: Make a minimal Hello World Worker and deploy it with Wrangler (npx wrangler deploy --temporary) without logging in. Use Wrangler, not the HTTP API. The temporary account's API token that Wrangler uses is the key; its account id is ACCOUNT_ID
+verify_cli: npm
+verify_hosts: workers.dev, dash.cloudflare.com
+verify_call: GET https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/workers/subdomain
+verify_fields: ACCOUNT_ID
+```
+
+The agent installs CLIs inside the run folder (`.tools/`), since its sandbox can write nowhere else, and a CLI that saves a login is run with its home there too, so the login is scrubbed with everything else. A CLI built on Node's `fetch` reaches the network only on Node 22.21, or 24 and later (`NODE_USE_ENV_PROXY`); on older Node it fails to connect. When a person has to create the token first (`existing_account`), the agent stops at that step and says so, which verify counts as a correct handoff.
+
+You don't tell the agent where to save its key: the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`, and the checker reads them from there. When the product hands back several secrets, say in `task` which one the check uses (for Neon, "the identity assertion is the key"); without that, an agent may save the wrong one. Before the real run, `verify --check` shows what it would do without starting the agent or sending a request to your product: whether Claude Code is installed and signed in, the hosts the agent may reach, the inbox, what the agent saves, and the calls the checker makes. It exits `0` when ready and `2` when not.
 
 ```bash
 npx @tansohq/agent-ready verify --check
