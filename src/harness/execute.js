@@ -142,7 +142,10 @@ export async function execute({ task, runId, doc, workDir, credentials, mode, pe
         const hit = events.find((e) => e.kind === "tool_result" && /hcaptcha|recaptcha|turnstile|arkose|captcha_frontend_enabled/i.test(e.text));
         return hit ? `${(hit.text.match(/hcaptcha|recaptcha|turnstile|arkose/i) || ["captcha"])[0].toLowerCase()} at seq ${hit.seq}` : null;
       })(),
-      serverErrors: events.filter((e) => e.kind === "tool_result" && /\b50[0-9]\b|Service Unavailable|Bad Gateway/i.test(e.text.slice(0, 600))).length,
+      // A real 5xx response: a status line, a status field, the reason phrase, or a short label and the code on its
+      // own line as an agent's script prints it ("account 503"). A bare number in prose is not enough: a Cloudflare
+      // run reading docs was called an outage that way. Checked against every recorded run: only monday.com's matches.
+      serverErrors: events.filter((e) => e.kind === "tool_result" && /HTTP\/[\d.]+ 5\d\d\b|"(?:status|statusCode|status_code)"\s*:\s*5\d\d\b|\b(?:Service Unavailable|Bad Gateway|Gateway Timeout|Internal Server Error)\b|(?:^|\n)[A-Za-z_]{1,30}[ :]+5\d\d(?=\s|$)/i.test(e.text.slice(0, 600))).length,
       // The agent could not open a connection at all: the test environment, not the product (a sandbox that blocks
       // localhost did this to a loop run on a local sample product).
       connectionFailures: events.filter((e) => e.kind === "tool_result" && /Failed to connect|Connection refused|ECONNREFUSED|Could not resolve host|ENOTFOUND|Couldn't connect to server/i.test(e.text)).length,

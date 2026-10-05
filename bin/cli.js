@@ -219,7 +219,8 @@ Examples:
     if (!opts.json) console.error(`\n  ${style.dim(`Starting the agent on ${host}${noInbox ? " (no inbox)" : ""}…`)}`);
     const result = await runHarness({ taskModule: buildVerifyTask({ url, task, spec }), runId: id, outDir: out, version: pkg.version, mode: "signup", inboxAddress: opts.inbox || null, noInbox, executorName: opts.executor, maxTurns: opts.maxTurns, model: opts.model, log });
     if (live) process.stderr.write("\r\x1b[2K");
-    const verdict = classify(result, config.onboarding);
+    const resultMd = existsSync(join(out, "work", "RESULT.md")) ? readFileSync(join(out, "work", "RESULT.md"), "utf8") : "";
+    const verdict = classify(result, config.onboarding, resultMd);
 
     let promptFile = null;
     if (verdict.outcome === "failed") {

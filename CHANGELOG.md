@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 (2026-10-05)
+
+- `verify` checks products that need more than one plain call: `verify_fields` (values the agent saves next to its key, used as `{NAME}` in the call), `POST` calls with `verify_body`, and an exchange step (`verify_exchange`, `verify_exchange_body`, `verify_exchange_token`) that turns the key into the token the check uses. `verify_hosts` lets the agent reach a CLI's package registry or a second domain. Real runs: Neon passed through its assertion-for-token exchange (12 turns, $0.13), Mem0 passed with a `Token` header and its CLI from npm (41 turns, $0.34).
+- A 400 for a missing key counts as refused, alongside 401 and 403: Cloudflare answers that way, and a working Cloudflare key was reported as a failure. A second Cloudflare run used its 40 turns reading docs and got no key, so Cloudflare is not yet confirmed as a pass.
+- Server errors are counted only from real 5xx responses (a status line or field, the reason phrase, or a short label and code on their own line). A bare number in prose had made that Cloudflare run read as an outage. Against every recorded run, only monday.com's real 503s match.
+- When the trace shows no key and the agent's own notes report a 5xx, verify says the result is inconclusive and that it is the agent's report: Inkbox's 500s reached the agent through `curl -s`, which drops the status line.
+
 ## 0.1.6 (2026-10-05)
 
 - The testing agent can no longer use a real person's email address. Claude Code tells the model the signed-in account's email, and two runs (Inkbox, Edge Network) gave it to the product as the account's human contact, one through a script the agent wrote and then ran. A PreToolUse hook now refuses any command, request or written file (other than the agent's own notes) that carries an address other than the test identity's; placeholder domains such as example.com are allowed. The persona instructions say the same. Checked with a real `claude -p` run.

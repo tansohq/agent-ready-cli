@@ -114,7 +114,24 @@ verify_expect: 200                           # default
 verify_assert: id                            # optional: a field that must be present, or field=value
 ```
 
-The checker makes that call three times: with the agent's key (must return `verify_expect` and pass the assertion), with no key, and with a wrong key (both must be refused with 401 or 403). A call that answers without a key proves nothing, so verify says so instead of passing.
+Some products need more than one plain call, and four optional lines cover the cases seen so far:
+
+- `verify_fields: PROJECT_ID` asks the agent to save other values next to its key, and `{PROJECT_ID}` in the call fills them in (Cloudflare's check names the account: `GET https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/workers/subdomain`).
+- `verify_call: POST <url>` with `verify_body` sends a body; one starting with `{` goes as JSON, anything else as a form.
+- `verify_exchange: POST <url>`, `verify_exchange_body` and `verify_exchange_token` make a first call that turns the key into the token the check uses. Neon's agent gets an identity assertion and exchanges it for an access token:
+
+```yaml
+verify_call: GET https://claimable.neon.tech/v1/projects/{PROJECT_ID}/credentials
+verify_fields: PROJECT_ID
+verify_exchange: POST https://claimable.neon.tech/v1/oauth2/token
+verify_exchange_body: grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion={key}&resource=https://claimable.neon.tech/
+verify_exchange_token: access_token
+verify_assert: database_url
+```
+
+- `verify_hosts` lists hosts the agent may reach beyond the product's own, such as a CLI's package registry (`registry.npmjs.org`).
+
+The checker makes that call three times: with the agent's key (must return `verify_expect` and pass the assertion), with no key, and with a wrong key (both must be refused with 400, 401 or 403). A call that answers without a key proves nothing, so verify says so instead of passing.
 
 ```
   agent-ready verify · app.tansohq.com

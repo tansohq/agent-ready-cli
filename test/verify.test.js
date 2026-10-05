@@ -62,7 +62,10 @@ const PLAN = "Use the REST API. Signup docs: https://acme.dev/docs/agents\n";
 describe("verify: the declared call", () => {
   it("needs a GET with a full URL, a header with {key}, a 2xx expectation", () => {
     assert.match(parseVerifySpec({}).error, /no verify_call/);
-    assert.match(parseVerifySpec({ verify_call: "POST https://x.dev/v1/me" }).error, /must be "GET <full URL>"/);
+    assert.match(parseVerifySpec({ verify_call: "PUT https://x.dev/v1/me" }).error, /must be "GET <full URL>" or "POST <full URL>"/);
+    assert.equal(parseVerifySpec({ verify_call: "POST https://x.dev/v1/query", verify_body: '{"q":1}' }).method, "POST");
+    assert.match(parseVerifySpec({ verify_call: "GET https://x.dev/{ACCOUNT_ID}", verify_fields: "account-id" }).error, /upper-case names/);
+    assert.match(parseVerifySpec({ verify_call: "GET https://x.dev/me", verify_exchange: "POST https://x.dev/token" }).error, /needs verify_exchange_token/);
     assert.match(parseVerifySpec({ verify_call: "GET https://x.dev/v1/me", verify_header: "X-Key" }).error, /verify_header must look like/);
     assert.match(parseVerifySpec({ verify_call: "GET https://x.dev/v1/me", verify_expect: "401" }).error, /2xx/);
     const spec = parseVerifySpec({ verify_call: "https://x.dev/v1/me", verify_assert: "anonymous=false" });
@@ -71,9 +74,72 @@ describe("verify: the declared call", () => {
     assert.equal(spec.expect, 200);
   });
 
+  it("adds the hosts listed in verify_hosts, and only host names", () => {
+    const spec = parseVerifySpec({ verify_call: "GET https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/workers/subdomain", verify_fields: "ACCOUNT_ID", verify_hosts: "workers.dev, registry.npmjs.org" });
+    const hosts = networkFor("https://cloudflare.com/", spec);
+    for (const h of ["api.cloudflare.com", "workers.dev", "registry.npmjs.org"]) assert.ok(hosts.includes(h), h);
+    assert.match(parseVerifySpec({ verify_call: "GET https://x.dev/me", verify_hosts: "https://evil.dev/path" }).error, /host names/);
+  });
+
   it("lets the agent reach the product, its usual subdomains and the API host", () => {
     const hosts = networkFor("https://acme.dev/", { url: "https://api.acme-cloud.com/v1/me" });
     for (const h of ["acme.dev", "api.acme.dev", "docs.acme.dev", "api.acme-cloud.com"]) assert.ok(hosts.includes(h), h);
+  });
+});
+
+// A Neon-shaped product: the agent's key is an assertion exchanged for an access token, and the check reads one
+// project, named by an id the agent saved next to its key.
+function serveExchange() {
+  const server = createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const json = (status, value) => { res.writeHead(status, { "content-type": "application/json" }); res.end(JSON.stringify(value)); };
+    if (req.url === "/" ) { res.writeHead(200, { "content-type": "text/html" }); return res.end("<html><head><title>Neonish</title></head></html>"); }
+    if (req.url === "/oauth/token" && req.method === "POST") {
+      const form = new URLSearchParams(body);
+      return form.get("assertion") === "eyJ.good.assertion" ? json(200, { access_token: "tok_access_123456" }) : json(401, { error: "invalid_grant" });
+    }
+    if (req.url === "/v1/projects/prj_42/credentials") return req.headers.authorization === "Bearer tok_access_123456" ? json(200, { database_url: "postgres://…" }) : json(401, { error: "unauthorized" });
+    if (req.url === "/v1/query" && req.method === "POST") return req.headers["x-api-key"] === GOOD && JSON.parse(body || "{}").q === "quota" ? json(200, { isAnonymous: false }) : json(401, {});
+    json(404, {});
+  });
+  return new Promise((r) => server.listen(0, "127.0.0.1", () => r({ server, base: `http://127.0.0.1:${server.address().port}` })));
+}
+
+describe("verify: checks with an exchange, saved fields or a POST", () => {
+  let site;
+  before(async () => { site = await serveExchange(); });
+  after(() => site.server.close());
+  const neon = () => parseVerifySpec({
+    verify_call: `GET ${site.base}/v1/projects/{PROJECT_ID}/credentials`,
+    verify_fields: "PROJECT_ID",
+    verify_exchange: `POST ${site.base}/oauth/token`,
+    verify_exchange_body: "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion={key}",
+    verify_exchange_token: "access_token",
+    verify_assert: "database_url",
+  });
+
+  it("exchanges the key for a token, fills the saved project id, and refuses no key and a wrong key", async () => {
+    const r = await checkKey(neon(), "eyJ.good.assertion", { fields: { PROJECT_ID: "prj_42" } });
+    assert.equal(r.ok, true, r.detail);
+    assert.match(r.objects.checks[2].detail, /exchange .* → 401/);
+  });
+
+  it("a missing saved field is a clear failure, not a confusing 404", async () => {
+    const r = await checkKey(neon(), "eyJ.good.assertion", { fields: {} });
+    assert.equal(r.ok, false);
+    assert.match(r.detail, /did not save PROJECT_ID/);
+  });
+
+  it("asks the agent to save the fields the check needs", () => {
+    const { task } = buildVerifyTask({ url: `${site.base}/`, task: "Sign up", spec: neon() });
+    assert.ok(task.instructions.signup.some((line) => /AGENT_READY_KEY=<value> and PROJECT_ID=<value>/.test(line)));
+  });
+
+  it("a POST check sends its body with the key in the declared header", async () => {
+    const spec = parseVerifySpec({ verify_call: `POST ${site.base}/v1/query`, verify_body: '{"q":"quota"}', verify_header: "X-Api-Key: {key}", verify_assert: "isAnonymous=false" });
+    const r = await checkKey(spec, GOOD);
+    assert.equal(r.ok, true, r.detail);
   });
 });
 
@@ -97,6 +163,20 @@ describe("verify: the checker", () => {
     const verdict = classify(result, "try_then_claim");
     assert.equal(verdict.outcome, "inconclusive");
     assert.match(verdict.reason, /could not connect/);
+  });
+
+  it("a 400 for a missing key counts as refused, as Cloudflare answers it", async () => {
+    const fake = async (url, init) => ({ status: init.headers.Authorization === `Bearer ${GOOD}` ? 200 : init.headers.Authorization ? 401 : 400, text: async () => "{}" });
+    const r = await checkKey(parseVerifySpec({ verify_call: "GET https://api.cloudflare.com/client/v4/user" }), GOOD, { fetchImpl: fake });
+    assert.equal(r.ok, true, r.detail);
+  });
+
+  it("a server error the agent reports, with no key, is inconclusive and says it is the agent's report", () => {
+    const result = { evaluation: { success: false, stoppedAt: "not_acquired" }, execution: { stoppedBecause: "success", signals: {} } };
+    const v = classify(result, "limited_until_claimed", "**HTTP Status**: 500 (Server Error)\nSorry, we encountered an error");
+    assert.equal(v.outcome, "inconclusive");
+    assert.match(v.reason, /agent reports server errors/);
+    assert.equal(classify(result, "limited_until_claimed", "Read the docs; 500 requests per minute allowed.").outcome, "failed");
   });
 
   it("an endpoint that answers without a key proves nothing, and says so", async () => {
@@ -302,6 +382,17 @@ describe("verify: command", () => {
     const r = runCli(["verify"], cwd);
     assert.equal(r.status, 2);
     assert.match(r.stderr, /Pass --yes/);
+  });
+
+  it("keeps the exchange and field lines too when the answers are rewritten", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "verify-cli-"));
+    const path = join(cwd, "agent-ready.yml");
+    writeFileSync(path, "url: neon.com\ntask: Sign up\nonboarding: try_then_claim\nverify_call: GET https://claimable.neon.tech/v1/projects/{PROJECT_ID}/credentials\nverify_fields: PROJECT_ID\nverify_exchange: POST https://claimable.neon.tech/v1/oauth2/token\nverify_exchange_body: grant_type=x&assertion={key}\nverify_exchange_token: access_token\n");
+    writeConfig(path, { url: "neon.com", task: "Sign up", answers: { onboarding: { value: "try_then_claim" }, abuse_cost: { value: "low" }, human_before: { value: "never" } } });
+    const config = readConfig(path);
+    assert.equal(config.verify_exchange_token, "access_token");
+    assert.equal(config.verify_fields, "PROJECT_ID");
+    assert.equal(config.verify_exchange_body, "grant_type=x&assertion={key}");
   });
 
   it("re-answering the audit questions keeps the verify lines the user filled in", () => {

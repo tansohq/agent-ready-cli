@@ -6,29 +6,51 @@ import { registrableDomain } from "../interface/sources.js";
 // succeed and pass the assertion), with no key and with a wrong key (both must be refused). That catches an
 // endpoint that answers anyone, without code written for each product.
 
-const REFUSED = new Set([401, 403]);
+// A request turned away for lacking a valid key. Cloudflare answers a missing token with 400, not 401.
+const REFUSED = new Set([400, 401, 403]);
 export const KEY_ENV = "AGENT_READY_KEY";
 
 // The verify_* lines of agent-ready.yml as a spec, or { error } naming what is missing.
+// A call is "GET <url>" or "POST <url>". {key} is the agent's key, and {NAME} is any other value the agent saved in
+// CREDENTIAL.env (listed in verify_fields), so a check can name the account or project the signup created.
+// verify_exchange is an optional first call that turns the key into the token the check uses, as Neon's identity
+// assertion is exchanged for an access token.
+const CALL = /^(?:(GET|POST)\s+)?(https?:\/\/\S+)$/i;
+const FIELD_NAME = /^[A-Z][A-Z0-9_]*$/;
 export function parseVerifySpec(config) {
-  const call = (config?.verify_call || "").trim();
-  if (!call) return { error: "agent-ready.yml has no verify_call. Add the call that proves a key works, for example: verify_call: GET https://api.example.com/v1/me" };
-  const match = /^(?:(GET)\s+)?(https?:\/\/\S+)$/i.exec(call);
-  if (!match) return { error: `verify_call must be "GET <full URL>", not "${call}"` };
+  const callText = (config?.verify_call || "").trim();
+  if (!callText) return { error: "agent-ready.yml has no verify_call. Add the call that proves a key works, for example: verify_call: GET https://api.example.com/v1/me" };
+  const match = CALL.exec(callText);
+  if (!match) return { error: `verify_call must be "GET <full URL>" or "POST <full URL>", not "${callText}"` };
   const header = (config.verify_header || "Authorization: Bearer {key}").trim();
   const colon = header.indexOf(":");
   if (colon < 1 || !header.includes("{key}")) return { error: `verify_header must look like "Name: value with {key}", not "${header}"` };
   const expect = Number(config.verify_expect || 200);
   if (!Number.isInteger(expect) || expect < 200 || expect > 299) return { error: `verify_expect must be a 2xx status, not "${config.verify_expect}"` };
+  const fields = (config.verify_fields || "").split(/[\s,]+/).filter(Boolean);
+  const badField = fields.find((f) => !FIELD_NAME.test(f) || f === KEY_ENV);
+  if (badField) return { error: `verify_fields must be upper-case names like PROJECT_ID, not "${badField}"` };
   const assertText = (config.verify_assert || "").trim();
   const eq = assertText.indexOf("=");
   const assert = !assertText ? null : eq === -1 ? { path: assertText, equals: null } : { path: assertText.slice(0, eq).trim(), equals: assertText.slice(eq + 1).trim() };
-  return { method: "GET", url: match[2], header: { name: header.slice(0, colon).trim(), template: header.slice(colon + 1).trim() }, expect, assert };
+  let exchange = null;
+  if (config.verify_exchange) {
+    const ex = CALL.exec(config.verify_exchange.trim());
+    if (!ex) return { error: `verify_exchange must be "POST <full URL>", not "${config.verify_exchange}"` };
+    if (!config.verify_exchange_token) return { error: "verify_exchange needs verify_exchange_token: the response field that holds the token, for example access_token" };
+    exchange = { method: (ex[1] || "POST").toUpperCase(), url: ex[2], body: config.verify_exchange_body || null, tokenPath: config.verify_exchange_token.trim() };
+  }
+  // Extra hosts the agent may reach, beyond the product's own: a CLI's package registry, a second dashboard domain.
+  const hosts = (config.verify_hosts || "").split(/[\s,]+/).filter(Boolean);
+  const badHost = hosts.find((h) => !/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(h));
+  if (badHost) return { error: `verify_hosts must be host names like registry.npmjs.org, not "${badHost}"` };
+  return { method: (match[1] || "GET").toUpperCase(), url: match[2], body: config.verify_body || null, header: { name: header.slice(0, colon).trim(), template: header.slice(colon + 1).trim() }, expect, assert, fields, exchange, hosts };
 }
 
 export function describeSpec(spec) {
   const assertion = spec.assert ? (spec.assert.equals === null ? `, ${spec.assert.path} present` : `, ${spec.assert.path} = ${spec.assert.equals}`) : "";
-  return `${spec.method} ${spec.url} with ${spec.header.name}: ${spec.header.template}; expect ${spec.expect}${assertion}`;
+  const first = spec.exchange ? `${spec.exchange.method} ${spec.exchange.url} for a token (${spec.exchange.tokenPath}), then ` : "";
+  return `${first}${spec.method} ${spec.url} with ${spec.header.name}: ${spec.header.template}; expect ${spec.expect}${assertion}`;
 }
 
 function readPath(json, path) {
@@ -45,9 +67,21 @@ function wrongKey(key) {
   return key.length > 8 ? `${key.slice(0, -4)}${key.slice(-4) === "xxxx" ? "yyyy" : "xxxx"}` : `${key}x`;
 }
 
-async function call(spec, key, fetchImpl) {
-  const headers = key === null ? {} : { [spec.header.name]: spec.header.template.replace("{key}", key) };
-  const res = await fetchImpl(spec.url, { method: spec.method, headers, signal: AbortSignal.timeout(30_000) });
+// {key} and {NAME} placeholders. In a URL the values are encoded; in a body or header they are used as they are.
+function fill(template, values, encode = false) {
+  return template.replace(/\{(key|[A-Z][A-Z0-9_]*)\}/g, (whole, name) => (name in values ? (encode ? encodeURIComponent(values[name]) : values[name]) : whole));
+}
+
+// A body that starts with { is sent as JSON, anything else as a form.
+const contentType = (body) => (body.trim().startsWith("{") ? "application/json" : "application/x-www-form-urlencoded");
+
+async function send(fetchImpl, method, url, body, headers) {
+  const init = { method, headers: { ...headers }, signal: AbortSignal.timeout(30_000) };
+  if (body !== null && body !== undefined) {
+    init.body = body;
+    init.headers["content-type"] = contentType(body);
+  }
+  const res = await fetchImpl(url, init);
   const text = await res.text();
   let json = null;
   let jsonError = null;
@@ -60,23 +94,47 @@ async function call(spec, key, fetchImpl) {
   return { status: res.status, json, jsonError, text };
 }
 
+// The exchange, when there is one: the key in, a token out. A refused exchange is a refused key.
+async function tokenFor(spec, key, values, fetchImpl) {
+  if (!spec.exchange) return { token: key };
+  const r = await send(fetchImpl, spec.exchange.method, fill(spec.exchange.url, { ...values, key }, true), spec.exchange.body === null ? null : fill(spec.exchange.body, { ...values, key }), {});
+  const token = r.jsonError ? undefined : readPath(r.json, spec.exchange.tokenPath);
+  if (r.status < 200 || r.status > 299 || typeof token !== "string" || !token) return { token: null, status: r.status, detail: `exchange ${spec.exchange.url} → ${r.status}${typeof token === "string" ? "" : `, no ${spec.exchange.tokenPath}`}` };
+  return { token };
+}
+
+async function call(spec, key, values, fetchImpl) {
+  const url = fill(spec.url, values, true);
+  const body = spec.body === null ? null : fill(spec.body, values);
+  if (key === null) return send(fetchImpl, spec.method, url, body, {});
+  const t = await tokenFor(spec, key, values, fetchImpl);
+  if (t.token === null) return { status: t.status, json: null, jsonError: null, text: "", exchangeDetail: t.detail };
+  return send(fetchImpl, spec.method, url, body, { [spec.header.name]: fill(spec.header.template, { ...values, key: t.token }) });
+}
+
 // The three calls. checkerInvalid means the declared call proves nothing (it answers without a key), which is a
-// problem with agent-ready.yml, not with the product or the agent.
-export async function checkKey(spec, key, { fetchImpl = fetch } = {}) {
-  const real = await call(spec, key, fetchImpl);
-  const none = await call(spec, null, fetchImpl);
-  const wrong = await call(spec, wrongKey(key), fetchImpl);
+// problem with agent-ready.yml, not with the product or the agent. fields are the other values in CREDENTIAL.env.
+export async function checkKey(spec, key, { fetchImpl = fetch, fields = {} } = {}) {
+  const values = Object.fromEntries(spec.fields.map((f) => [f, fields[f]]).filter(([, v]) => v));
+  const missing = spec.fields.filter((f) => !values[f]);
+  if (missing.length) {
+    const checks = [{ id: "key_works", label: "Key works", pass: false, detail: `the agent did not save ${missing.join(", ")} in CREDENTIAL.env` }];
+    return { ok: false, status: 0, detail: checks[0].detail, objects: { checks, checkerInvalid: false } };
+  }
+  const real = await call(spec, key, values, fetchImpl);
+  const none = await call(spec, null, values, fetchImpl);
+  const wrong = await call(spec, wrongKey(key), values, fetchImpl);
   const checks = [];
   let assertPass = true;
   let assertDetail = "";
-  if (spec.assert) {
+  if (spec.assert && !real.exchangeDetail) {
     const value = real.jsonError ? undefined : readPath(real.json, spec.assert.path);
     assertPass = spec.assert.equals === null ? value !== undefined && value !== null : String(value) === spec.assert.equals;
     assertDetail = real.jsonError ? `; body is not JSON (${real.jsonError})` : `; ${spec.assert.path} = ${value === undefined ? "missing" : JSON.stringify(value)}`;
   }
-  checks.push({ id: "key_works", label: "Key works", pass: real.status === spec.expect && assertPass, detail: `${spec.method} ${spec.url} → ${real.status}${assertDetail}` });
+  checks.push({ id: "key_works", label: "Key works", pass: !real.exchangeDetail && real.status === spec.expect && assertPass, detail: real.exchangeDetail || `${spec.method} ${spec.url} → ${real.status}${assertDetail}` });
   checks.push({ id: "no_key_refused", label: "No key refused", pass: REFUSED.has(none.status), detail: `without a key → ${none.status}` });
-  checks.push({ id: "wrong_key_refused", label: "Wrong key refused", pass: REFUSED.has(wrong.status), detail: `with a wrong key → ${wrong.status}` });
+  checks.push({ id: "wrong_key_refused", label: "Wrong key refused", pass: Boolean(wrong.exchangeDetail) ? wrong.status >= 400 && wrong.status < 500 : REFUSED.has(wrong.status), detail: wrong.exchangeDetail ? `with a wrong key → ${wrong.exchangeDetail}` : `with a wrong key → ${wrong.status}` });
   const checkerInvalid = !REFUSED.has(none.status) && none.status >= 200 && none.status < 300;
   const ok = checks.every((c) => c.pass);
   const detail = checks.map((c) => c.detail).join("; ");
@@ -87,7 +145,7 @@ export async function checkKey(spec, key, { fetchImpl = fetch } = {}) {
 export function networkFor(targetUrl, spec) {
   const host = new URL(targetUrl).hostname;
   const apex = registrableDomain(host);
-  const hosts = [host, apex, ...["www", "api", "docs", "app", "auth", "console", "dashboard", "developers"].map((s) => `${s}.${apex}`), new URL(spec.url).hostname];
+  const hosts = [host, apex, ...["www", "api", "docs", "app", "auth", "console", "dashboard", "developers"].map((s) => `${s}.${apex}`), new URL(spec.url.replace(/\{[^}]+\}/g, "x")).hostname, ...(spec.exchange ? [new URL(spec.exchange.url.replace(/\{[^}]+\}/g, "x")).hostname] : []), ...(spec.hosts || [])];
   return [...new Set(hosts)];
 }
 
@@ -97,19 +155,23 @@ export function buildVerifyTask({ url, task, spec, fetchImpl = fetch }) {
     id: "verify",
     name: host,
     url,
-    apiHost: new URL(spec.url).hostname,
+    apiHost: new URL(spec.url.replace(/\{[^}]+\}/g, "x")).hostname,
     network: networkFor(url, spec),
     credentialEnvName: KEY_ENV,
+    extraFields: spec.fields,
     keyPattern: /^\S{8,}$/,
     taskText: `${task}. The product is ${host}.`,
-    verify: { describe: describeSpec(spec), call: (key) => checkKey(spec, key, { fetchImpl }) },
+    verify: { describe: describeSpec(spec), call: (key, runId, fields) => checkKey(spec, key, { fetchImpl, fields }) },
   });
 }
 
 // Pass, handoff, fail or inconclusive, from the harness result. A handoff passes only when the chosen onboarding
 // model says a person sets access up first: then stopping at that step is the agent doing the right thing.
 const PERSON_FIRST = new Set(["existing_account", "agent_identity"]);
-export function classify(result, onboarding) {
+// resultMd: the agent's own notes. Its report of a 5xx counts only as the agent's report, and only when the trace
+// itself shows no key: Inkbox's 500s reached the agent through `curl -s`, which drops the status line.
+const REPORTED_5XX = /\b(?:HTTP\s*(?:status)?|status(?:\s*code)?)\W{0,4}5\d\d\b|\b5\d\d\s*\((?:server|internal)/i;
+export function classify(result, onboarding, resultMd = "") {
   const evaluation = result.evaluation || {};
   const stages = result.reconciled?.stages || [];
   if (evaluation.success) return { outcome: "passed", exitCode: 0, reason: "A real agent got its own key and the checker confirmed it works." };
@@ -117,6 +179,7 @@ export function classify(result, onboarding) {
   if (stages.some((s) => s.agent?.outcome === "product_unavailable")) return { outcome: "inconclusive", exitCode: 3, reason: "The product returned server errors during the run. Try again later." };
   // Only a run that ended on its own (or used its whole turn budget) says anything about the product. A timeout,
   // a crash or a stopped process does not: the second real run was stopped after the agent already had a key.
+  if (evaluation.stoppedAt !== "credential_rejected" && REPORTED_5XX.test(resultMd || "")) return { outcome: "inconclusive", exitCode: 3, reason: "The agent reports server errors from the product (see RESULT.md). Try again later." };
   const stopped = result.execution?.stoppedBecause || "";
   if (!["success", "error_max_turns"].includes(stopped)) return { outcome: "inconclusive", exitCode: 3, reason: `The agent run did not finish (${stopped || "no result"}). This is not a result about the product.` };
   const unreachable = result.execution?.signals?.connectionFailures || 0;
