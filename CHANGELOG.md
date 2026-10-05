@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.1.4 (unreleased)
+## 0.1.5 (2026-10-05)
+
+- `verify` with `AGENTMAIL_API_KEY` set gives each run its own inbox and deletes it afterwards; documented in the README. Real runs: Cosmic (needs an email) and Telnyx (accepts the agent's own email) both passed, $0.15 each.
+- Emails in the run's `inbox/` are scrubbed after the run, and one-time tokens in links (`?token=`, `?code=`, `?claim=`, `?portal_redirect_token=` and similar) are treated as secrets everywhere. The Telnyx run had left a one-time sign-in link in its saved mail: the scrub skipped subfolders and only knew JSON field names.
+
+## 0.1.4 (2026-10-05)
 
 - The npm package is built into `dist/cli` with its own `package.json` that depends only on `commander` and `aeo-ready`: about 15 MB installed instead of 65 MB, with no server dependencies (`pg`, Clerk, Vercel) and no Playwright. The hidden browser and video commands say how to install Playwright when they need it.
 - Source is public at https://github.com/tansohq/agent-ready-cli, and the package links there.

@@ -19,8 +19,12 @@ const GENERIC = [
 // (it stopped, was stopped, or ignored the instruction) and the event log keeps only the start of each result:
 // with curl -i the headers fill it and the body holding the key is cut off. Quotes may arrive escaped (\").
 const SECRET_FIELD = /\\?"((?:[a-z]+_)*(?:api_?key|key|token|secret|password|claim_?code|claim_?url|verification_code|client_secret)|apiKey|accessToken|refreshToken|claimCode|claimUrl|clientSecret)\\?"\s*:\s*\\?"([^"\\\s]{8,})\\?"/gi;
+// The same for links: a one-time sign-in or claim link carries its secret as a URL parameter (Telnyx's emails had
+// ?token=…, Cosmic's ?token=agk_…). Values shorter than 12 characters are left alone so page numbers survive.
+const SECRET_PARAM = /[?&](token|code|key|claim|claim_token|otp|signature|sig|auth|magic|access_token|portal_redirect_token)=([^&\s"'<>\\]{12,})/gi;
 export function secretsInText(text) {
-  return [...new Set([...String(text ?? "").matchAll(SECRET_FIELD)].map((m) => m[2]))];
+  const t = String(text ?? "");
+  return [...new Set([...[...t.matchAll(SECRET_FIELD)].map((m) => m[2]), ...[...t.matchAll(SECRET_PARAM)].map((m) => m[2])])];
 }
 
 export function resolveCredentials(task, env = process.env) {

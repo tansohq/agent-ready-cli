@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import * as claudePrint from "./executors/claude-print.js";
 import { personaInstructions } from "./persona.js";
+import { secretsInText } from "./secrets.js";
 
 // Executor interface. Any replacement (Agent SDK, another agent) implements:
 //   name: string
@@ -73,17 +74,21 @@ export function sourcesFrom(events) {
 
 // Agent-written files are part of the record but not part of the trace boundary: scrub them after the run so a key
 // the agent copied into a file never persists. The scrub is recorded.
-function scrubWorkDir(workDir, redact) {
-  const scrubbed = [];
+// Subfolders too: inbox/ holds the product's emails, with their sign-in and claim links.
+function scrubWorkDir(workDir, redact, scrubbed = [], base = workDir) {
   for (const name of readdirSync(workDir)) {
     const p = join(workDir, name);
+    if (statSync(p).isDirectory()) {
+      if (name !== "node_modules" && name !== ".git") scrubWorkDir(p, redact, scrubbed, base);
+      continue;
+    }
     // CREDENTIAL.env is read raw by the evaluator and overwritten by the harness afterwards; never scrub it here.
-    if (name === "CREDENTIAL.env" || !statSync(p).isFile() || /\.(png|jpg|gz|zip|bin)$/i.test(name)) continue;
+    if (name === "CREDENTIAL.env" || /\.(png|jpg|gz|zip|bin|mp4|webm)$/i.test(name)) continue;
     const before = readFileSync(p, "utf8");
     const after = redact(before);
     if (after !== before) {
       writeFileSync(p, after);
-      scrubbed.push(name);
+      scrubbed.push(relative(base, p));
     }
   }
   return scrubbed;
@@ -111,6 +116,9 @@ export async function execute({ task, runId, doc, workDir, credentials, mode, pe
   const acquired = acquiredKeyValue(workDir, task.credentialEnvName || "STRIPE_API_KEY");
   if (acquired) credentials.learn(acquired);
   for (const v of acquiredValues(workDir)) credentials.learn(v);
+  // Mail arrives through the inbox poller, not the agent's output, so its links are learned here.
+  const inboxDir = join(workDir, "inbox");
+  if (existsSync(inboxDir)) for (const f of readdirSync(inboxDir)) for (const v of secretsInText(readFileSync(join(inboxDir, f), "utf8"))) credentials.learn(v);
   // trace.jsonl was written live, before the acquired value was known: scrub it again now.
   const scrubbed = scrubWorkDir(workDir, credentials.redact);
   for (const e of events) for (const k of ["text", "input"]) if (typeof e[k] === "string") e[k] = credentials.redact(e[k]);

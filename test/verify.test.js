@@ -161,6 +161,34 @@ describe("verify: what the agent inherits and what stays on disk", () => {
     assert.equal(settingsFor({ network: networkFor("http://localhost:4321/", { url: "http://localhost:4321/v1/me" }), tools: ["Bash"] }).sandbox.network.allowLocalBinding, true);
   });
 
+  it("finds one-time tokens in links, not short page numbers", () => {
+    assert.deepEqual(secretsInText("Sign in: https://portal.telnyx.com/#/login?portal_redirect_token=01a10ce9-306e-7bd8&next=1"), ["01a10ce9-306e-7bd8"]);
+    assert.deepEqual(secretsInText("https://example.com/docs?page=2&code=abc"), []);
+  });
+
+  it("scrubs sign-in links from the emails in inbox/ after the run", async () => {
+    const link = "https://portal.example.dev/login?token=onetime0123456789abcdef";
+    EXECUTORS["fake-mail"] = {
+      name: "fake-mail",
+      run: async ({ workDir }) => {
+        writeFileSync(join(workDir, "PLAN.md"), PLAN);
+        writeFileSync(join(workDir, "inbox", "0001.json"), JSON.stringify({ from: "noreply@example.dev", subject: "Sign in", text: `Click ${link}` }));
+        const now = new Date().toISOString();
+        return { executor: { name: "fake-mail" }, startedAt: now, finishedAt: now, exitCode: 0, stoppedBecause: "success", turns: 2, costUsd: 0.01, stderr: null, rawTrace: null };
+      },
+    };
+    try {
+      const spec = parseVerifySpec({ verify_call: `GET ${site.base}/v1/me` });
+      const out = mkdtempSync(join(tmpdir(), "verify-mail-"));
+      await runHarness({ taskModule: buildVerifyTask({ url: `${site.base}/`, task: "Sign up", spec }), runId: "run_m", outDir: out, version: "test", mode: "signup", noInbox: true, executorName: "fake-mail", maxTurns: 2 });
+      const mail = readFileSync(join(out, "work", "inbox", "0001.json"), "utf8");
+      assert.doesNotMatch(mail, /onetime0123456789abcdef/);
+      assert.match(mail, /noreply@example\.dev/);
+    } finally {
+      delete EXECUTORS["fake-mail"];
+    }
+  });
+
   it("finds secrets a product returned, by field name, in plain or escaped JSON", () => {
     assert.deepEqual(secretsInText('{"key":"ark_ws1_s3cretvalue","claimCode":"clm_ws1_alsosecret","claimed":false}').sort(), ["ark_ws1_s3cretvalue", "clm_ws1_alsosecret"]);
     assert.deepEqual(secretsInText(String.raw`{"content":"{\n  \"key\": \"ark_ws1_s3cretvalue\"}"}`), ["ark_ws1_s3cretvalue"]);
