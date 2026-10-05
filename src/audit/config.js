@@ -29,6 +29,17 @@ export function writeConfig(path, { url, task, answers }) {
         "# verify_header: Authorization: Bearer {key}",
         "# verify_expect: 200",
         "# verify_assert: id            # a field that must be present, or field=value",
+        "#",
+        "# Only when the product needs them:",
+        "# verify_body: {\"query\":\"{ viewer { id } }\"}   # makes the call a POST body; use POST in verify_call",
+        "# verify_fields: PROJECT_ID     # values the agent saves next to its key; use {PROJECT_ID} in the call",
+        "# verify_exchange: POST https://api.example.com/oauth/token   # trade the key for a token first",
+        "# verify_exchange_body: grant_type=client_credentials&assertion={key}",
+        "# verify_exchange_token: access_token   # where the token is in the exchange's JSON reply",
+        "# verify_hosts: auth.example-cloud.com  # more hosts the agent may reach, comma separated",
+        "#",
+        "# The agent saves its key as AGENT_READY_KEY (and each verify_fields name) in work/CREDENTIAL.env;",
+        "# the task does not need to say so. Run `agent-ready verify --check` to see the plan before a real run.",
       ];
   const lines = [
     "# agent-ready: how agents should onboard to this product. Edit and commit.",

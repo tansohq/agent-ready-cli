@@ -130,7 +130,10 @@ export async function checkKey(spec, key, { fetchImpl = fetch, fields = {} } = {
   if (spec.assert && !real.exchangeDetail) {
     const value = real.jsonError ? undefined : readPath(real.json, spec.assert.path);
     assertPass = spec.assert.equals === null ? value !== undefined && value !== null : String(value) === spec.assert.equals;
-    assertDetail = real.jsonError ? `; body is not JSON (${real.jsonError})` : `; ${spec.assert.path} = ${value === undefined ? "missing" : JSON.stringify(value)}`;
+    // A presence check names the field, never its value: the response may be a credential (Neon's database_url
+    // carries the database password), and this detail is printed and saved.
+    const shown = value === undefined || value === null ? "missing" : spec.assert.equals === null ? "present" : JSON.stringify(value);
+    assertDetail = real.jsonError ? `; body is not JSON (${real.jsonError})` : spec.assert.equals === null ? `; ${spec.assert.path} ${shown}` : `; ${spec.assert.path} = ${shown}`;
   }
   checks.push({ id: "key_works", label: "Key works", pass: !real.exchangeDetail && real.status === spec.expect && assertPass, detail: real.exchangeDetail || `${spec.method} ${spec.url} → ${real.status}${assertDetail}` });
   checks.push({ id: "no_key_refused", label: "No key refused", pass: REFUSED.has(none.status), detail: `without a key → ${none.status}` });

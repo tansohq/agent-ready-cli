@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8 (2026-10-05)
+
+- A Neon run printed and saved the project's database password: the check `verify_assert: database_url` showed the field's value, and the agent's trace kept the connection string. An assertion with no `=value` now reports only that the field is present, and the scrubber removes the password from any connection string (`postgres://user:password@…`) and Neon's `npg_` tokens, whatever the field is called.
+- `verify --check` shows what a run would do without starting the agent or making a request: Claude Code installed and signed in, the hosts the agent may reach, the inbox, what the agent saves and the calls the checker makes. Exits `0` when ready, `2` when not; `--json` prints `agent-ready/verify-plan@1`. A real run now also stops at the start when Claude Code is signed out, instead of failing inside the agent.
+- The `agent-ready.yml` that `audit` writes lists every optional verify setting with a comment, and says the agent saves its key as `AGENT_READY_KEY` in `work/CREDENTIAL.env`, so the task need not.
+- README: removed a line saying exchanges were unsupported (0.1.7 added them); documented `--check`, how the key is saved, and `execute`.
+- The identity guard's message names the blocked address as the one that is not the test identity; it read as if the blocked address were the identity.
+
 ## 0.1.7 (2026-10-05)
 
 - `verify` checks products that need more than one plain call: `verify_fields` (values the agent saves next to its key, used as `{NAME}` in the call), `POST` calls with `verify_body`, and an exchange step (`verify_exchange`, `verify_exchange_body`, `verify_exchange_token`) that turns the key into the token the check uses. `verify_hosts` lets the agent reach a CLI's package registry or a second domain. Real runs: Neon passed through its assertion-for-token exchange (12 turns, $0.13), Mem0 passed with a `Token` header and its CLI from npm (41 turns, $0.34).

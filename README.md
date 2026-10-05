@@ -21,10 +21,11 @@ If you are an agent running this for a developer, nothing needs a terminal:
 ```bash
 npx @tansohq/agent-ready audit example.com --json --yes
 npx @tansohq/agent-ready audit example.com --json --onboarding existing_account --abuse-cost high --human-before always
+npx @tansohq/agent-ready verify --check --json      # free: checks setup and prints the plan, runs nothing
 npx @tansohq/agent-ready verify --json --yes        # creates a real account on the product; ask the developer first
 ```
 
-- `--json` prints one JSON document to stdout: `agent-ready/audit-report@1` for audit (with `files.prompts`, `files.brief` and `files.config`, relative to where it ran), `agent-ready/verify@1` for verify, and `agent-ready/error@1` for any error, as `{ error: { code, message, hint } }`.
+- `--json` prints one JSON document to stdout: `agent-ready/audit-report@1` for audit (with `files.prompts`, `files.brief` and `files.config`, relative to where it ran), `agent-ready/verify@1` for verify, `agent-ready/verify-plan@1` for `verify --check`, and `agent-ready/error@1` for any error, as `{ error: { code, message, hint } }`.
 - The three questions have flags: `--onboarding`, `--abuse-cost`, `--human-before`. Any of them, or `--yes`, means no prompt; unanswered ones take their defaults. `--human-before never` lets an agent act alone, `outbound` requires a verified person before an agent sends, publishes, charges or invites, and `always` requires a verified person to own the account before any use. The fix prompts carry that rule.
 - Exit codes: `0` done, `1` fixes at or above `--fail-on` (audit) or the check failed (verify), `2` usage or setup, `3` the site did not answer or the run was inconclusive, `130` cancelled.
 - Each fix prompt is written for a coding agent: read `files.prompts[0]`, make the change in the developer's repository, run its acceptance tests, then run audit again.
@@ -131,6 +132,12 @@ verify_assert: database_url
 
 - `verify_hosts` lists hosts the agent may reach beyond the product's own, such as a CLI's package registry (`registry.npmjs.org`).
 
+You don't tell the agent where to save its key: the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`, and the checker reads them from there. Before the real run, `verify --check` shows what it would do without starting the agent or making a request: whether Claude Code is installed and signed in, the hosts the agent may reach, the inbox, what the agent saves, and the calls the checker makes. It exits `0` when ready and `2` when not.
+
+```bash
+npx @tansohq/agent-ready verify --check
+```
+
 The checker makes that call three times: with the agent's key (must return `verify_expect` and pass the assertion), with no key, and with a wrong key (both must be refused with 400, 401 or 403). A call that answers without a key proves nothing, so verify says so instead of passing.
 
 ```
@@ -146,12 +153,14 @@ The checker makes that call three times: with the agent's key (must return `veri
   11 turns · $0.37 · evidence in .agent-ready/app.tansohq.com/2026-10-05T02-35-22-et9ch3/
 ```
 
-It works on a product running on your machine too (`url: localhost:3000` means `http://localhost:3000`; on macOS the agent's sandbox opens localhost only for a local target). One declared call is the whole check, so a product whose key must first be exchanged for a second token (Neon's claimable projects) is not supported yet.
+It works on a product running on your machine too (`url: localhost:3000` means `http://localhost:3000`; on macOS the agent's sandbox opens localhost only for a local target).
 
-It creates a real account on the product, named with the run id, and asks before starting (`--yes` skips the question). The agent can reach only the product's own hosts and the verify call's host. For products that email a code or a link, set `AGENTMAIL_API_KEY` (an [AgentMail](https://agentmail.to) key): each run gets a fresh inbox, the agent reads the mail from it, and the inbox is deleted afterwards. Cosmic and Telnyx both passed this way. With no inbox (`AGENTMAIL_API_KEY` unset and no `--inbox`), the agent stops and says so where a product requires email. The key, claim codes, and one-time codes and links in the agent's mail are scrubbed from every file after the check. The agent may use only its test identity's email address: Claude Code tells the model the signed-in account's email, so a hook refuses any command, request or written file that carries another real address, and with no inbox the agent has no address at all.
+It creates a real account on the product, named with the run id, and asks before starting (`--yes` skips the question). The agent can reach only the product's own hosts and the verify call's host. For products that email a code or a link, set `AGENTMAIL_API_KEY` (an [AgentMail](https://agentmail.to) key): each run gets a fresh inbox, the agent reads the mail from it, and the inbox is deleted afterwards. Cosmic and Telnyx both passed this way. With no inbox (`AGENTMAIL_API_KEY` unset and no `--inbox`), the agent stops and says so where a product requires email. The key, claim codes, passwords in connection strings (`postgres://user:password@…`), and one-time codes and links in the agent's mail are scrubbed from every file after the check, and an assertion like `verify_assert: database_url` reports that the field is present, never its value. The agent may use only its test identity's email address: Claude Code tells the model the signed-in account's email, so a hook refuses any command, request or written file that carries another real address, and with no inbox the agent has no address at all.
 
-Exit codes: `0` passed (or a correct handoff when your onboarding model says a person sets access up first), `1` failed (a fix prompt is written to the run's `prompts/`), `2` usage error or missing `verify_call`, `3` inconclusive (the product returned server errors, the run did not finish, or the verify call answers without a key), `130` cancelled.
+Exit codes: `0` passed (or a correct handoff when your onboarding model says a person sets access up first), `1` failed (a fix prompt is written to the run's `prompts/`), `2` usage error, missing `verify_call`, or Claude Code missing or signed out, `3` inconclusive (the product returned server errors, the run did not finish, or the verify call answers without a key), `130` cancelled.
 
 ## More
+
+`agent-ready execute --task <id>` reruns one of the built-in example tasks against its public product with a real agent; `agent-ready execute --help` lists them. For your own product, use `verify`.
 
 Source: https://github.com/tansohq/agent-ready-cli. Issues and questions go there. The hosted dashboard at app.tansohq.com is a separate service and not part of this package.

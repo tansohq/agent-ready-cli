@@ -2,7 +2,7 @@ import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +11,7 @@ import { renderVerify } from "../src/verify/render.js";
 import { makeStyle } from "../src/audit/render.js";
 import { runHarness } from "../src/harness/index.js";
 import { EXECUTORS } from "../src/harness/execute.js";
-import { secretsInText, secretsInMail } from "../src/harness/secrets.js";
+import { secretsInText, secretsInMail, resolveCredentials } from "../src/harness/secrets.js";
 import { chmodSync, mkdirSync } from "node:fs";
 import { argsFor, settingsFor, run as runClaudePrint } from "../src/harness/executors/claude-print.js";
 import { readConfig, writeConfig } from "../src/audit/config.js";
@@ -99,7 +99,7 @@ function serveExchange() {
       const form = new URLSearchParams(body);
       return form.get("assertion") === "eyJ.good.assertion" ? json(200, { access_token: "tok_access_123456" }) : json(401, { error: "invalid_grant" });
     }
-    if (req.url === "/v1/projects/prj_42/credentials") return req.headers.authorization === "Bearer tok_access_123456" ? json(200, { database_url: "postgres://…" }) : json(401, { error: "unauthorized" });
+    if (req.url === "/v1/projects/prj_42/credentials") return req.headers.authorization === "Bearer tok_access_123456" ? json(200, { database_url: "postgresql://neondb_owner:npg_s3cretPassw0rd@ep-x.neon.tech/neondb" }) : json(401, { error: "unauthorized" });
     if (req.url === "/v1/query" && req.method === "POST") return req.headers["x-api-key"] === GOOD && JSON.parse(body || "{}").q === "quota" ? json(200, { isAnonymous: false }) : json(401, {});
     json(404, {});
   });
@@ -123,6 +123,8 @@ describe("verify: checks with an exchange, saved fields or a POST", () => {
     const r = await checkKey(neon(), "eyJ.good.assertion", { fields: { PROJECT_ID: "prj_42" } });
     assert.equal(r.ok, true, r.detail);
     assert.match(r.objects.checks[2].detail, /exchange .* → 401/);
+    assert.match(r.objects.checks[0].detail, /database_url present/);
+    assert.doesNotMatch(JSON.stringify(r), /npg_s3cretPassw0rd/);
   });
 
   it("a missing saved field is a clear failure, not a confusing 404", async () => {
@@ -246,7 +248,7 @@ describe("verify: what the agent inherits and what stays on disk", () => {
     const run = (command, allowed) => spawnSync(process.execPath, [guard, ...allowed], { input: JSON.stringify({ tool_input: { command } }), encoding: "utf8" });
     const real = run('curl -d \'{"human_email":"someone.real@gmail.com"}\' https://inkbox.ai/api/v1/agent-signup/', ["ari@agentmail.to"]);
     assert.equal(real.status, 2);
-    assert.match(real.stderr, /not the test identity's \(someone\.real@gmail\.com\)/);
+    assert.match(real.stderr, /uses someone\.real@gmail\.com, which is not this run's test identity/);
     assert.equal(run('curl -d \'{"email":"ari@agentmail.to","hint":"you@example.com"}\' https://x.dev', ["ari@agentmail.to"]).status, 0);
     assert.equal(run("curl https://x.dev -d email=anyone@company.dev", []).status, 2, "with no inbox, no address at all");
     // A script written with the address, then run with a command that has none, is caught when it is written.
@@ -297,6 +299,15 @@ describe("verify: what the agent inherits and what stays on disk", () => {
   it("finds secrets a product returned, by field name, in plain or escaped JSON", () => {
     assert.deepEqual(secretsInText('{"key":"ark_ws1_s3cretvalue","claimCode":"clm_ws1_alsosecret","claimed":false}').sort(), ["ark_ws1_s3cretvalue", "clm_ws1_alsosecret"]);
     assert.deepEqual(secretsInText(String.raw`{"content":"{\n  \"key\": \"ark_ws1_s3cretvalue\"}"}`), ["ark_ws1_s3cretvalue"]);
+  });
+
+  it("finds and redacts the password in a connection string, whatever the field is called", () => {
+    const line = '{"database_url":"postgresql://neondb_owner:npg_s3cretPassw0rd@ep-x.neon.tech/neondb"}';
+    assert.deepEqual(secretsInText(line), ["npg_s3cretPassw0rd"]);
+    const { redact } = resolveCredentials({ credentials: [] }, {});
+    assert.equal(redact("postgres://app:hunter2hunter@db.internal:5432/x"), "postgres://app:<redacted>@db.internal:5432/x");
+    assert.doesNotMatch(redact(line), /s3cretPassw0rd/);
+    assert.deepEqual(secretsInText("see https://docs.neon.tech/guides and mailto:a@b.dev"), []);
   });
 
   // The real executor, with a stand-in claude binary on PATH. The signup body sits after long headers, as curl -i
@@ -382,6 +393,44 @@ describe("verify: command", () => {
     const r = runCli(["verify"], cwd);
     assert.equal(r.status, 2);
     assert.match(r.stderr, /Pass --yes/);
+  });
+
+  // A stand-in claude on PATH answers --version and auth status, so the check never depends on this machine.
+  const fakeClaude = (loggedIn) => {
+    const bin = mkdtempSync(join(tmpdir(), "fake-claude-"));
+    writeFileSync(join(bin, "claude"), `#!/usr/bin/env node\nif (process.argv[2] === "--version") console.log("9.9.9 (Claude Code)");\nelse console.log(JSON.stringify({ loggedIn: ${loggedIn} }));\n`);
+    chmodSync(join(bin, "claude"), 0o755);
+    return bin;
+  };
+  const checkIn = (bin) => {
+    const cwd = mkdtempSync(join(tmpdir(), "verify-cli-"));
+    writeFileSync(join(cwd, "agent-ready.yml"), "url: neon.com\ntask: Sign up\nonboarding: try_then_claim\nverify_call: GET https://claimable.neon.tech/v1/projects/{PROJECT_ID}/credentials\nverify_fields: PROJECT_ID\nverify_exchange: POST https://claimable.neon.tech/v1/oauth2/token\nverify_exchange_body: assertion={key}\nverify_exchange_token: access_token\n");
+    const env = { ...process.env, NO_COLOR: "1", PATH: `${bin}:${process.env.PATH}` };
+    delete env.ANTHROPIC_API_KEY;
+    return { cwd, env };
+  };
+
+  it("--check prints the plan and starts nothing", () => {
+    const { cwd, env } = checkIn(fakeClaude(true));
+    const r = spawnSync(process.execPath, [CLI, "verify", "--check", "--json"], { cwd, encoding: "utf8", env });
+    assert.equal(r.status, 0, r.stderr);
+    const plan = JSON.parse(r.stdout);
+    assert.equal(plan.schema, "agent-ready/verify-plan@1");
+    assert.equal(plan.claudeCode.detail, "Claude Code 9.9.9, signed in");
+    assert.deepEqual(plan.agent.saves, ["AGENT_READY_KEY", "PROJECT_ID"]);
+    assert.ok(plan.agent.hosts.includes("claimable.neon.tech"));
+    assert.match(plan.checker.call, /oauth2\/token for a token/);
+    assert.equal(existsSync(join(cwd, ".agent-ready")), false);
+  });
+
+  it("--check and a real run both stop when Claude Code is signed out", () => {
+    const { cwd, env } = checkIn(fakeClaude(false));
+    const check = spawnSync(process.execPath, [CLI, "verify", "--check"], { cwd, encoding: "utf8", env });
+    assert.equal(check.status, 2);
+    assert.match(check.stderr, /NOT READY .*claude auth login/);
+    const run = spawnSync(process.execPath, [CLI, "verify", "--yes", "--json"], { cwd, encoding: "utf8", env });
+    assert.equal(run.status, 2);
+    assert.equal(JSON.parse(run.stdout).error.code, "claude_code_signed_out");
   });
 
   it("keeps the exchange and field lines too when the answers are rewritten", () => {

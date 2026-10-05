@@ -25,8 +25,8 @@ import { inspect, buildAudit, writeAudit, parseTarget, unreachableReason, DEFAUL
 import { defaultAnswers, askQuestions, QUESTIONS, HOLDER_OPTIONS } from "../src/audit/questions.js";
 import { readConfig, writeConfig, CONFIG_FILE } from "../src/audit/config.js";
 import { makeStyle, renderVerdict, renderSteps, renderSummary } from "../src/audit/render.js";
-import { parseVerifySpec, buildVerifyTask, classify, failedStep } from "../src/verify/index.js";
-import { renderVerify } from "../src/verify/render.js";
+import { parseVerifySpec, buildVerifyTask, classify, failedStep, networkFor, describeSpec } from "../src/verify/index.js";
+import { renderVerify, renderPlan } from "../src/verify/render.js";
 import { renderPrompt } from "../src/audit/prompts.js";
 import { patternInfo } from "../src/audit/index.js";
 import { createInterface } from "node:readline/promises";
@@ -164,6 +164,20 @@ Examples:
     if (opts.failOn && audit.findings.some((f) => FAIL_ON[opts.failOn].includes(f.severity))) process.exitCode = 1;
   });
 
+// Claude Code runs the agent. Missing or signed out, the run cannot start: a setup step, not a result.
+function claudeStatus() {
+  const version = spawnSync("claude", ["--version"], { encoding: "utf8" });
+  if (version.error) return { ok: false, code: "claude_code_missing", detail: "verify runs the agent with Claude Code, and the claude command was not found.", hint: "Install it from https://claude.com/claude-code, sign in, then run agent-ready verify again." };
+  const found = `Claude Code ${version.stdout.trim().split(/\s/)[0]}`;
+  if (process.env.ANTHROPIC_API_KEY) return { ok: true, detail: `${found}, using ANTHROPIC_API_KEY` };
+  const status = spawnSync("claude", ["auth", "status"], { encoding: "utf8" });
+  let loggedIn = null;
+  try { loggedIn = JSON.parse(status.stdout).loggedIn; }
+  catch { return { ok: true, detail: `${found}, sign-in not checked (this version has no "claude auth status")` }; }
+  if (loggedIn === false) return { ok: false, code: "claude_code_signed_out", detail: `${found} is installed but not signed in.`, hint: 'Run "claude auth login", then run agent-ready verify again.' };
+  return { ok: true, detail: `${found}, signed in` };
+}
+
 program
   .command("verify [url]")
   .description("Have a real agent try the task in agent-ready.yml on your product, then check its key with the call you declared. Creates an account on the product and uses your Claude Code.")
@@ -173,10 +187,12 @@ program
   .option("--model <name>", "model for the agent")
   .option("--executor <name>", "agent runner", "claude-print")
   .option("--out <dir>", "run directory (default: .agent-ready/<host>/<runId>)")
+  .option("--check", "check the setup and print the run plan without starting the agent (free, makes no requests)")
   .option("--json", "print the result to stdout")
   .option("--no-color", "plain output")
   .addHelpText("after", `
 Examples:
+  agent-ready verify --check          check Claude Code and agent-ready.yml, print the plan, run nothing
   agent-ready verify                  use url, task and verify_call from agent-ready.yml
   agent-ready verify --yes --json     no confirmation, JSON result (CI)`)
   .exitOverride(usageExit)
@@ -190,6 +206,22 @@ Examples:
     const host = new URL(url).host;
     const task = config.task || DEFAULT_TASK;
     const style = makeStyle(Boolean(process.stderr.isTTY) && opts.color && !process.env.NO_COLOR && !opts.json);
+    if (opts.check) {
+      const claude = opts.executor === "claude-print" ? claudeStatus() : { ok: true, detail: `executor ${opts.executor}` };
+      const inbox = process.env.AGENTMAIL_API_KEY ? "AgentMail: a fresh inbox for this run, deleted after" : opts.inbox ? `you relay mail from ${opts.inbox} into work/inbox/` : "none (set AGENTMAIL_API_KEY if the product emails a code or link)";
+      const plan = {
+        schema: "agent-ready/verify-plan@1",
+        ready: claude.ok,
+        target: { url, host },
+        task,
+        claudeCode: claude,
+        agent: { hosts: networkFor(url, spec), inbox, maxTurns: opts.maxTurns, saves: ["AGENT_READY_KEY", ...spec.fields] },
+        checker: { call: describeSpec(spec), calls: ["with the agent's key: must answer " + spec.expect, "with no key: must be refused (400, 401 or 403)", "with a wrong key: must be refused"] },
+      };
+      if (opts.json) process.stdout.write(JSON.stringify(plan, null, 2) + "\n");
+      else for (const line of renderPlan(plan, style)) console.error(line);
+      process.exit(plan.ready ? 0 : 2);
+    }
     if (!opts.yes) {
       if (!process.stdin.isTTY) fail(opts, 2, "confirmation_required", "verify runs a real agent that creates an account on the product.", "Pass --yes to run it without a terminal.");
       const rl = createInterface({ input: process.stdin, output: process.stderr });
@@ -205,7 +237,10 @@ Examples:
     }
 
     // After the confirmation, so a missing --yes is reported first. The local runner is Claude Code. Without it the run cannot start, which is a setup step, not a result.
-    if (opts.executor === "claude-print" && spawnSync("claude", ["--version"], { stdio: "ignore" }).error) fail(opts, 2, "claude_code_missing", "verify runs the agent with Claude Code, and the claude command was not found.", "Install it from https://claude.com/claude-code, sign in, then run agent-ready verify again.");
+    if (opts.executor === "claude-print") {
+      const claude = claudeStatus();
+      if (!claude.ok) fail(opts, 2, claude.code, claude.detail, claude.hint);
+    }
     const id = newRunId();
     const out = resolve(opts.out || runDir(process.cwd(), { url }, id));
     const mailKey = process.env.AGENTMAIL_API_KEY || null;

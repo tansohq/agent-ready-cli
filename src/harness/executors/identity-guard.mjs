@@ -18,6 +18,6 @@ const found = text.match(/[A-Z0-9._%+-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)*\.[A-Z]{2,}/
 const refused = [...new Set(found.filter((e) => !allowed.has(e.toLowerCase()) && !PLACEHOLDER.test(e)))];
 if (refused.length) {
   const own = allowed.size ? `Use only ${[...allowed].join(", ")}.` : "This run has no email address of its own.";
-  process.stderr.write(`Blocked: this sends an email address that is not the test identity's (${refused.join(", ")}). Never use a real person's address, including any you know from your own context. ${own} If the product needs a person's email, write NEEDS_HUMAN.md naming that step and stop.\n`);
+  process.stderr.write(`Blocked: this uses ${refused.join(", ")}, which is not this run's test identity. Never use a real person's address, including any you know from your own context. ${own} If the product needs a person's email, write NEEDS_HUMAN.md naming that step and stop.\n`);
   process.exit(2);
 }

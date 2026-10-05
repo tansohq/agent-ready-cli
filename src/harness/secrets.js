@@ -10,6 +10,7 @@ const GENERIC = [
   /\bre_[A-Za-z0-9_-]{10,}\b/g,
   /\bmoltbook_(?!claim_)[A-Za-z0-9_-]{8,}/g,
   /\bea_live_[a-f0-9]{16,}/g,
+  /\bnpg_[A-Za-z0-9]{8,}/g,
   /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
   /Bearer\s+[A-Za-z0-9._-]{16,}/g,
 ];
@@ -22,9 +23,12 @@ const SECRET_FIELD = /\\?"((?:[a-z]+_)*(?:api_?key|key|token|secret|password|cla
 // The same for links: a one-time sign-in or claim link carries its secret as a URL parameter (Telnyx's emails had
 // ?token=…, Cosmic's ?token=agk_…). Values shorter than 12 characters are left alone so page numbers survive.
 const SECRET_PARAM = /[?&](token|code|key|claim|claim_token|otp|signature|sig|auth|magic|access_token|portal_redirect_token)=([^&\s"'<>\\]{12,})/gi;
+// And connection strings: postgres://user:password@host carries its password in the URL (Neon returned one as
+// database_url, a field name that says nothing about secrets).
+const URL_PASSWORD = /\b([a-z][a-z0-9+.-]{1,20}:\/\/[^\s:/@"'\\]+:)([^\s@"'\\/]{4,})@/gi;
 export function secretsInText(text) {
   const t = String(text ?? "");
-  return [...new Set([...[...t.matchAll(SECRET_FIELD)].map((m) => m[2]), ...[...t.matchAll(SECRET_PARAM)].map((m) => m[2])])];
+  return [...new Set([...[...t.matchAll(SECRET_FIELD)].map((m) => m[2]), ...[...t.matchAll(SECRET_PARAM)].map((m) => m[2]), ...[...t.matchAll(URL_PASSWORD)].map((m) => m[2])])];
 }
 
 // Mail adds two kinds a product sends a person: a short code after words like "code" or "OTP" (Cosmic's "Your
@@ -61,6 +65,7 @@ export function resolveCredentials(task, env = process.env) {
   const redact = (text) => {
     let out = String(text ?? "");
     for (const v of values) out = out.split(v).join("<redacted>");
+    out = out.replace(URL_PASSWORD, "$1<redacted>@");
     // Keep only a type marker (sk_test_, rk_live_, KEY, whisper-, …), never a usable segment of the value.
     for (const re of GENERIC) out = out.replace(re, (m) => (m.match(/^(?:sk|rk|pk|whsec)_(?:test|live)_/) || m.match(/^[A-Za-z]{2,8}[_-]/) || [m.slice(0, 3)])[0] + "…redacted");
     return out;
