@@ -1,0 +1,28 @@
+{
+  "schema": "agent-ready/crash@1",
+  "runId": "2026-08-21T10-00-00-acme1",
+  "target": { "url": "https://acme.dev" },
+  "startedAt": "2026-08-21T10:10:00.000Z",
+  "finishedAt": "2026-08-21T10:51:00.000Z",
+  "provider": { "name": "crash", "version": "0.1.0", "model": "synthetic" },
+  "available": true,
+  "mode": "full",
+  "persona": "agent with a task and a $50 budget",
+  "task": "Sign up for the free tier, get an API key, upgrade to the Starter plan, and make one metered call without a person opening the inbox.",
+  "flows": [
+    { "id": "discover", "result": "PASS", "human_interventions": 0, "quote": "Found acme.dev from the task brief; robots.txt allows me; llms.txt lists the docs.", "http": { "method": "GET", "url": "https://acme.dev/llms.txt", "status": 200 } },
+    { "id": "understand", "result": "PASS", "human_interventions": 0, "quote": "Pricing page is HTML only, but I could read three plans and the Starter price from it.", "http": { "method": "GET", "url": "https://acme.dev/pricing", "status": 200 } },
+    { "id": "signup", "result": "FAIL", "human_interventions": 0, "quote": "The signup form has a reCAPTCHA. I cannot solve it. Stopping here and reporting back.", "http": { "method": "POST", "url": "https://acme.dev/signup", "status": 400, "body": "{\"error\":\"captcha_required\"}" } },
+    { "id": "access", "result": "SKIP", "human_interventions": 0 },
+    { "id": "pay", "result": "SKIP", "human_interventions": 0 },
+    { "id": "use", "result": "SKIP", "human_interventions": 0 },
+    { "id": "manage", "result": "SKIP", "human_interventions": 0 }
+  ],
+  "findings": [
+    { "flow": "signup", "grade": "F-high", "text": "POST /signup rejects without a solved reCAPTCHA token; there is no alternative endpoint.", "command": "POST https://acme.dev/signup", "docLine": "docs/getting-started#create-an-account" },
+    { "flow": "understand", "grade": "F-med", "text": "Plan prices exist only in HTML; no pricing.json or GET /plans.", "command": "GET https://acme.dev/pricing.json → 404" }
+  ],
+  "worked": ["llms.txt links every docs page", "OpenAPI spec loads and lists 42 paths"],
+  "human_interventions": 0,
+  "human_assist": false
+}

@@ -1,0 +1,89 @@
+{
+  "schema": "agent-ready/audit@1",
+  "runId": "2026-09-09T10-00-00-acme2",
+  "target": {
+    "url": "https://acme.dev"
+  },
+  "startedAt": "2026-09-09T10:03:00.000Z",
+  "finishedAt": "2026-09-09T10:08:00.000Z",
+  "provider": {
+    "name": "audit",
+    "version": "0.1.0",
+    "model": "synthetic"
+  },
+  "available": true,
+  "areas": {
+    "onboarding": {
+      "score": 8,
+      "today": "POST /v1/accounts creates an account and returns the first API key. No CAPTCHA, no email loop.",
+      "blocks": [],
+      "build": "Add a sandbox flag so agents can provision a test account without a billing profile.",
+      "effort": "S",
+      "reference": "Cloudflare agent provisioning"
+    },
+    "authentication": {
+      "score": 8,
+      "today": "Key returned at signup; POST /v1/api-keys and rotate endpoint live; scopes read/write/billing.",
+      "blocks": [],
+      "build": "OAuth client credentials for multi-agent orgs.",
+      "effort": "M",
+      "reference": "Stripe restricted keys"
+    },
+    "purchasing": {
+      "score": 3,
+      "today": "GET /v1/plans and pricing.json published. Plan change still returns a Stripe hosted checkout URL.",
+      "blocks": [
+        "POST /billing/change-plan returns checkout_url that needs a browser"
+      ],
+      "build": "Stripe SetupIntent to save a card once, then POST /v1/subscriptions with payment_method id; return 402 with checkout_url only as a fallback.",
+      "effort": "M",
+      "reference": "Stripe Subscriptions API; tanso-oss 402 fallback"
+    },
+    "usage_monitoring": {
+      "score": 8,
+      "today": "GET /v1/usage returns current-period totals and remaining quota; X-RateLimit-* headers on every response.",
+      "blocks": [],
+      "build": "Threshold webhooks at 80% and 100%.",
+      "effort": "S",
+      "reference": "Twilio Usage Records"
+    },
+    "self_management": {
+      "score": 2,
+      "today": "Cancel and plan change in the dashboard only.",
+      "blocks": [
+        "No cancel or plan-change endpoint"
+      ],
+      "build": "PATCH /v1/subscriptions/{id} for plan changes; DELETE for cancel.",
+      "effort": "S",
+      "reference": "Stripe Subscriptions lifecycle"
+    },
+    "dev_readiness": {
+      "score": 6,
+      "today": "Structured JSON errors, OpenAPI published, test-mode keys. No idempotency keys, offset pagination.",
+      "blocks": [
+        "No idempotency keys on POST",
+        "Offset pagination"
+      ],
+      "build": "Idempotency-Key header on mutating endpoints; cursor pagination with has_more.",
+      "effort": "M",
+      "reference": "Stripe idempotency"
+    }
+  },
+  "hard_blockers": [
+    {
+      "area": "purchasing",
+      "text": "Plan change returns a hosted checkout URL that requires a browser."
+    }
+  ],
+  "quick_wins": [
+    {
+      "area": "usage_monitoring",
+      "text": "Add an 80% quota webhook so agents can self-throttle."
+    }
+  ],
+  "roadmap": [
+    "Plan catalog + SetupIntent purchase",
+    "Subscription lifecycle endpoints"
+  ],
+  "maturity": 2
+}

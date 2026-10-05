@@ -1,0 +1,204 @@
+{
+  "schema": "agent-ready/scan@1",
+  "runId": "2026-09-09T10-00-00-acme2",
+  "target": {
+    "url": "https://acme.dev"
+  },
+  "startedAt": "2026-09-09T10:00:00.000Z",
+  "finishedAt": "2026-09-09T10:02:00.000Z",
+  "provider": {
+    "name": "scan",
+    "version": "0.1.0"
+  },
+  "available": true,
+  "aeo": {
+    "url": "https://acme.dev",
+    "timestamp": "2026-09-09T10:00:00.000Z",
+    "averageScore": 74,
+    "benchmarks": {
+      "agenticSeo": {
+        "score": 72,
+        "maxScore": 100,
+        "grade": "B",
+        "categories": null,
+        "available": true
+      },
+      "cloudflare": {
+        "score": 4,
+        "maxScore": 5,
+        "grade": "C",
+        "categories": {},
+        "available": true,
+        "checks": [
+          {
+            "id": "robotsTxt",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "sitemap",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "robotsTxtAiRules",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "markdownForAgents",
+            "status": "fail",
+            "message": "Agent UA received HTML"
+          }
+        ]
+      },
+      "fern": {
+        "score": 71,
+        "maxScore": 100,
+        "grade": "C",
+        "categories": {},
+        "available": true,
+        "checks": [
+          {
+            "id": "llms-txt-exists",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "llms-txt-links-markdown",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "llms-txt-coverage",
+            "status": "warn",
+            "message": "Covers 61% of sitemap"
+          }
+        ]
+      },
+      "vercel": {
+        "score": 70,
+        "maxScore": 100,
+        "grade": "B",
+        "categories": {},
+        "available": true,
+        "checks": [
+          {
+            "id": "robots.txt",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": ".md URL \u2192 markdown",
+            "status": "fail",
+            "message": "status 404"
+          }
+        ]
+      },
+      "agentgrade": {
+        "score": 55,
+        "maxScore": 100,
+        "grade": "C",
+        "categories": {},
+        "available": true,
+        "checks": [
+          {
+            "id": "openapi",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "mcp-server-card",
+            "status": "warn",
+            "message": "no MCP server card"
+          }
+        ]
+      }
+    }
+  },
+  "probes": [
+    {
+      "id": "robots_ai",
+      "status": "pass",
+      "url": "https://acme.dev/robots.txt",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "detail": "AI bots not blocked (no explicit rules)"
+    },
+    {
+      "id": "agent_json",
+      "status": "pass",
+      "url": "https://acme.dev/.well-known/agent.json",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "detail": "agent manifest present with signup and pricing links"
+    },
+    {
+      "id": "llms_txt",
+      "status": "pass",
+      "url": "https://acme.dev/llms.txt",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "detail": "llms.txt present, links HTML pages"
+    },
+    {
+      "id": "openapi",
+      "status": "pass",
+      "url": "https://acme.dev/openapi.json",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "detail": "OpenAPI 3.0, 42 paths"
+    },
+    {
+      "id": "pricing_json",
+      "status": "pass",
+      "url": "https://acme.dev/pricing.json",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "detail": "pricing.json validates against agent-serve schema; 3 plans"
+    },
+    {
+      "id": "catalog_pricing",
+      "status": "skip",
+      "detail": "no catalog slug"
+    },
+    {
+      "id": "captcha",
+      "status": "pass",
+      "url": "https://acme.dev/signup",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "detail": "no CAPTCHA script on /signup; API path documented"
+    },
+    {
+      "id": "signup_endpoint",
+      "status": "pass",
+      "url": "https://acme.dev/api/signup",
+      "http": {
+        "method": "OPTIONS",
+        "status": 204
+      },
+      "detail": "POST /v1/accounts documented; returns api_key",
+      "data": {
+        "returnsKey": true
+      }
+    },
+    {
+      "id": "http_402",
+      "status": "skip",
+      "detail": "no purchase endpoint discovered"
+    }
+  ]
+}

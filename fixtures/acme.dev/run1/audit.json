@@ -1,0 +1,27 @@
+{
+  "schema": "agent-ready/audit@1",
+  "runId": "2026-08-21T10-00-00-acme1",
+  "target": { "url": "https://acme.dev" },
+  "startedAt": "2026-08-21T10:03:00.000Z",
+  "finishedAt": "2026-08-21T10:09:00.000Z",
+  "provider": { "name": "audit", "version": "0.1.0", "model": "synthetic" },
+  "available": true,
+  "areas": {
+    "onboarding": { "score": 2, "today": "Browser signup form with reCAPTCHA v2 and an email confirmation link. No API signup.", "blocks": ["reCAPTCHA on the only signup form", "Email verification loop before the first key"], "build": "POST /v1/accounts with email+password, return API key in the response, no email verification. Gate abuse with IP reputation instead of CAPTCHA.", "effort": "M", "reference": "Cloudflare agent provisioning" },
+    "authentication": { "score": 5, "today": "API keys generated in the dashboard; scoped read/write; no rotation endpoint.", "blocks": ["Keys created by a human in the dashboard", "No rotation API"], "build": "POST /v1/api-keys and POST /v1/api-keys/{id}/rotate, callable with the key returned at signup.", "effort": "S", "reference": "Stripe restricted keys" },
+    "purchasing": { "score": 3, "today": "Self-serve pricing page; plan change redirects to Stripe hosted checkout.", "blocks": ["POST /billing/change-plan returns checkout_url that needs a browser", "No plan catalog endpoint", "No pricing.json"], "build": "GET /v1/plans, Stripe SetupIntent to save a card once, then POST /v1/subscriptions with payment_method id. Publish pricing.json.", "effort": "M", "reference": "Stripe Subscriptions API" },
+    "usage_monitoring": { "score": 4, "today": "X-RateLimit-* headers on API responses; usage only in the dashboard.", "blocks": ["No usage endpoint"], "build": "GET /v1/usage with current-period totals and remaining quota.", "effort": "S", "reference": "Twilio Usage Records" },
+    "self_management": { "score": 2, "today": "Cancel and plan change in the dashboard only.", "blocks": ["No cancel or plan-change endpoint"], "build": "PATCH /v1/subscriptions/{id} for plan changes; DELETE for cancel.", "effort": "S", "reference": "Stripe Subscriptions lifecycle" },
+    "dev_readiness": { "score": 6, "today": "Structured JSON errors, OpenAPI published, test-mode keys. No idempotency keys, offset pagination.", "blocks": ["No idempotency keys on POST", "Offset pagination"], "build": "Idempotency-Key header on mutating endpoints; cursor pagination with has_more.", "effort": "M", "reference": "Stripe idempotency" }
+  },
+  "hard_blockers": [
+    { "area": "onboarding", "text": "reCAPTCHA on the only signup form stops every agent before an account exists." },
+    { "area": "purchasing", "text": "Plan change returns a hosted checkout URL that requires a browser." }
+  ],
+  "quick_wins": [
+    { "area": "authentication", "text": "Return the first API key in the signup response instead of the dashboard." },
+    { "area": "usage_monitoring", "text": "Expose GET /v1/usage with the same numbers the dashboard shows." }
+  ],
+  "roadmap": ["Remove CAPTCHA from the API signup path", "Plan catalog + SetupIntent purchase", "Usage endpoint", "Subscription lifecycle endpoints"],
+  "maturity": 1
+}

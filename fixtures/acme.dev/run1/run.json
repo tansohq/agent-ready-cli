@@ -1,0 +1,4 @@
+{
+  "task": "Sign up for the free tier, get an API key, upgrade to the Starter plan, and make one metered call without a person opening the inbox.",
+  "claims": { "web": true, "onboarding": true, "monetization": true }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "@tansohq/agent-ready",
+  "version": "0.1.4",
+  "description": "Check whether an AI agent can sign up for and use your product, get fix prompts for your coding agent, and verify with a real agent.",
+  "type": "module",
+  "bin": {
+    "agent-ready": "bin/cli.js"
+  },
+  "main": "./src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "files": [
+    "bin/cli.js",
+    "src/index.js",
+    "src/audit/",
+    "src/crash/",
+    "src/harness/",
+    "src/history/",
+    "src/interface/",
+    "src/probe/",
+    "src/report/",
+    "src/scan/",
+    "src/schema/",
+    "src/verify/",
+    "skills/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "agent-readiness",
+    "aeo",
+    "ai-agents",
+    "agentic-commerce",
+    "llms-txt",
+    "pricing-json",
+    "mcp"
+  ],
+  "author": "Kat Laszlo <kat@tansohq.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tansohq/agent-ready-cli.git"
+  },
+  "homepage": "https://github.com/tansohq/agent-ready-cli#readme",
+  "bugs": {
+    "url": "https://github.com/tansohq/agent-ready-cli/issues"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "aeo-ready": "^1.7.9"
+  }
+}

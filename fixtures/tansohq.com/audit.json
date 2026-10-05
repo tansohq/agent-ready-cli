@@ -1,0 +1,23 @@
+{
+  "schema": "agent-ready/audit@1",
+  "runId": "2026-09-09T21-00-00-fixture",
+  "target": { "url": "https://tansohq.com" },
+  "startedAt": "2026-09-09T21:01:00.000Z",
+  "finishedAt": "2026-09-09T21:06:00.000Z",
+  "provider": { "name": "audit", "version": "0.1.0", "model": "hand-written from public surfaces" },
+  "available": true,
+  "areas": {
+    "onboarding": { "score": 0, "today": "Product access is not open. agent.json says product_access:not_open; the only POST is /api/evaluation-request, which registers interest.", "blocks": ["No account creation path exists for anyone, agent or human"], "build": "Not applicable until hosted product access opens. Keep the evaluation-request contract stable.", "effort": "L" },
+    "authentication": { "score": 0, "today": "No hosted API to authenticate against. The integration guide tells agents to get credentials from a self-hosting operator.", "blocks": ["No hosted credential issuance"], "build": "Not applicable on tansohq.com; tanso-oss issues ck_ keys on self-hosted instances.", "effort": "L" },
+    "purchasing": { "score": 1, "today": "pricing.json exists and honestly states pricing is not announced. No plan catalog, no purchase path.", "blocks": ["Nothing to buy; pricing.json lacks $schema, revenue_model, plans"], "build": "When pricing is announced, publish pricing.json against the agent-serve schema with at least one plan.", "effort": "S" },
+    "usage_monitoring": { "score": 0, "today": "No hosted usage to monitor.", "blocks": ["No hosted API"], "build": "Not applicable.", "effort": "L" },
+    "self_management": { "score": 0, "today": "No hosted account to manage.", "blocks": ["No hosted API"], "build": "Not applicable.", "effort": "L" },
+    "dev_readiness": { "score": 7, "today": "OpenAPI 3.1 for the two public endpoints, llms.txt with .md twins for every page, AGENTS.md, agent.json, mcp.json, skills.json, api-catalog linkset, idempotent evaluation requests keyed by requestId.", "blocks": ["Public API surface is two endpoints, so idempotency, pagination and versioning are mostly untested"], "build": "Add a version field and deprecation note to openapi.json; publish llms-full.txt for the integration guide.", "effort": "S", "reference": "Stripe error model; Mintlify llms-full.txt" }
+  },
+  "hard_blockers": [],
+  "quick_wins": [
+    { "area": "purchasing", "text": "Make pricing.json validate against the agent-serve schema even while price is null, so agents can parse availability the same way they parse a catalog." }
+  ],
+  "roadmap": ["Open hosted product access with one-call signup returning a scoped key", "Publish a plan catalog when pricing is announced"],
+  "maturity": 1
+}

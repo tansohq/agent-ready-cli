@@ -1,0 +1,234 @@
+import { createHash } from "node:crypto";
+import { get, isHtml, joinUrl } from "../probe/http.js";
+
+// Discover and fetch a product's first-party public surfaces. Every fetch becomes one observation with provenance:
+// what URL, what we got back, when, and how we found it (a guessed well-known path, a link on another page, the sitemap).
+// Nothing here judges anything.
+
+const WELL_KNOWN = [
+  { role: "homepage", path: "/" },
+  { role: "robots", path: "/robots.txt" },
+  { role: "llms_txt", path: "/llms.txt" },
+  { role: "llms_full", path: "/llms-full.txt" },
+  { role: "auth", path: "/auth.md" },
+  // Agent-first products publish their signup procedure as a file an agent can
+  // read: Telnyx at /agent-signup.md, Cosmic at /skill.md (redirected to its docs).
+  { role: "onboarding", path: "/agent-signup.md" },
+  { role: "onboarding", path: "/skill.md" },
+  { role: "prm", path: "/.well-known/oauth-protected-resource" },
+  { role: "agent_json", path: "/.well-known/agent.json" },
+  { role: "agent_json", path: "/.well-known/agent-card.json" },
+  { role: "mcp_json", path: "/.well-known/mcp.json" },
+  { role: "pricing_json", path: "/pricing.json" },
+  { role: "openapi", path: "/openapi.json" },
+  { role: "openapi", path: "/.well-known/openapi.json" },
+  { role: "openapi", path: "/openapi.yaml" },
+  { role: "openapi", path: "/v3/api-docs" },
+  { role: "openapi", path: "/swagger.json" },
+  { role: "sitemap", path: "/sitemap.xml" },
+  { role: "pricing", path: "/pricing" },
+  { role: "docs", path: "/docs" },
+];
+
+// A link is worth following when its path or text says what it is. One role per pattern; first match wins.
+const LINK_ROLES = [
+  // First, so an agent-signup page is not filed under the looser auth or docs roles.
+  ["onboarding", /agent[-_]?(sign-?up|mode|register|onboarding)|agent-skills|\/skill\.md$|\/auth\.md$|\/claim(\.md)?$|claim-deployments|temporary-accounts|x402/i],
+  ["pricing", /^\/(pricing|plans|price)(\.(md|html?))?\/?$/i],
+  ["auth", /auth|api-key|apikey|api_keys|credentials|tokens?\b|oauth/i],
+  ["mcp", /\bmcp\b|model-context-protocol/i],
+  ["cli", /\bcli\b|command-line/i],
+  ["api_docs", /api-reference|\/reference|\/api\b|api-docs|openapi|swagger|graphql/i],
+  ["docs", /\/docs?\b|documentation|developers?\b|\/guides?\b|getting-started|quickstart/i],
+];
+
+const MAX_OBSERVATIONS = 36;
+const MAX_FOLLOW = 14;
+const MAX_PER_ROLE = 3;
+const SKIP_PATH = /\/(blog|news|changelog|careers|legal|privacy|terms)\b|\.(png|jpg|svg|css|js|xml|json)$/i;
+
+function sha(text) {
+  return createHash("sha256").update(text).digest("hex").slice(0, 16);
+}
+
+// Not the full Public Suffix List, just the two-label suffixes common enough that "last two labels" would make
+// every .co.uk site the same site as every other.
+const TWO_LABEL_SUFFIXES = new Set(["co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "co.nz", "com.br", "co.in", "com.cn", "co.za", "com.mx", "com.sg"]);
+
+export function registrableDomain(host) {
+  const parts = host.toLowerCase().replace(/^www\./, "").split(".");
+  return parts.slice(TWO_LABEL_SUFFIXES.has(parts.slice(-2).join(".")) ? -3 : -2).join(".");
+}
+
+export function sameSite(url, base) {
+  try {
+    // Hostname, not host: a port is not part of which site something belongs to.
+    return registrableDomain(new URL(url).hostname) === registrableDomain(new URL(base).hostname);
+  } catch {
+    return false;
+  }
+}
+
+// Pull href + anchor text pairs out of HTML without a DOM.
+export function extractLinks(html, pageUrl) {
+  const out = [];
+  const re = /<a\b[^>]*href\s*=\s*["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    let href;
+    try {
+      href = new URL(m[1], pageUrl).toString();
+    } catch {
+      continue;
+    }
+    const text = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    out.push({ href: href.replace(/[?#].*$/, ""), text });
+  }
+  return out;
+}
+
+export function extractMarkdownLinks(text, pageUrl) {
+  const out = [];
+  const re = /\[([^\]]*)\]\(([^)\s]+)\)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    try {
+      out.push({ href: new URL(m[2], pageUrl).toString().replace(/[?#].*$/, ""), text: m[1].slice(0, 80) });
+    } catch {
+      // not a URL
+    }
+  }
+  return out;
+}
+
+export function extractSitemapUrls(xml) {
+  return [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+}
+
+// Role comes from the path; anchor text alone is too loose (every blog post "about pricing" would match).
+export function roleForLink({ href }) {
+  let path;
+  try {
+    path = new URL(href).pathname;
+  } catch {
+    return null;
+  }
+  if (SKIP_PATH.test(path)) return null;
+  for (const [role, re] of LINK_ROLES) if (re.test(path)) return role;
+  return null;
+}
+
+export function htmlToText(html) {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function observation(id, role, url, res, discoveredVia) {
+  const text = res.text || "";
+  return {
+    id,
+    role,
+    url,
+    finalUrl: res.url || url,
+    method: "GET",
+    status: res.status,
+    ok: res.ok && res.status >= 200 && res.status < 300,
+    contentType: res.contentType.split(";")[0].trim() || null,
+    bytes: text.length,
+    sha256: text ? sha(text) : null,
+    fetchedAt: new Date().toISOString(),
+    error: res.error || null,
+    discoveredVia,
+    excerpt: text ? (isHtml(res) ? htmlToText(text) : text).slice(0, 240) : "",
+    // The one response header worth keeping: a 401 that names its resource
+    // metadata is how an agent discovers what an API is without being told.
+    wwwAuthenticate: res.headers?.["www-authenticate"] || null,
+  };
+}
+
+// Returns observations (for the record) and bodies (kept in memory for extraction, never written out).
+export async function collectSources(base, { log = () => {}, fetchSource = get } = {}) {
+  const observations = [];
+  const bodies = new Map();
+  const seen = new Set();
+  let n = 0;
+
+  async function fetchOne(role, url, discoveredVia) {
+    const key = url.replace(/\/$/, "");
+    if (seen.has(key) || observations.length >= MAX_OBSERVATIONS) return null;
+    seen.add(key);
+    const res = await fetchSource(url);
+    n += 1;
+    const obs = observation(`obs_${String(n).padStart(2, "0")}`, role, url, res, discoveredVia);
+    observations.push(obs);
+    if (obs.ok && res.text) bodies.set(obs.id, { text: res.text, html: isHtml(res) });
+    log(obs);
+    return obs;
+  }
+
+  for (const w of WELL_KNOWN) await fetchOne(w.role, joinUrl(base, w.path), { kind: "well_known", path: w.path });
+
+  // Docs often live on their own subdomain with their own llms.txt, and that is
+  // where an agent-signup page is indexed (Mem0 links it only from docs.mem0.ai).
+  const docsHost = `docs.${registrableDomain(new URL(base).host)}`;
+  if (new URL(base).host !== docsHost) await fetchOne("llms_txt", `https://${docsHost}/llms.txt`, { kind: "well_known", path: "docs subdomain /llms.txt" });
+
+  // If the resource metadata names its own API, ask that API for something
+  // without a credential. A refusal is the observation: whether the 401 tells an
+  // agent where the rules are written, or just says no. Without this the check
+  // can never be satisfied by anyone, since nothing else we fetch is protected.
+  // One unauthenticated GET, which is what any client does before it has a key.
+  const prm = observations.find((o) => o.ok && o.role === "prm");
+  const prmBody = prm && bodies.get(prm.id);
+  if (prmBody) {
+    let resource = null;
+    try { resource = JSON.parse(prmBody.text).resource; } catch { resource = null; }
+    if (typeof resource === "string" && /^https?:\/\//.test(resource)) {
+      await fetchOne("resource_challenge", resource, { kind: "resource_metadata", path: "resource" });
+    }
+  }
+
+  // Follow links from what we already have: homepage, llms.txt, docs, sitemap. Same registrable domain only.
+  const candidates = [];
+  for (const obs of [...observations]) {
+    const body = bodies.get(obs.id);
+    if (!body) continue;
+    let links = [];
+    if (obs.role === "sitemap") links = extractSitemapUrls(body.text).map((href) => ({ href, text: "" }));
+    else if (body.html) links = extractLinks(body.text, obs.finalUrl);
+    else if (obs.role === "llms_txt" || obs.role === "llms_full") links = extractMarkdownLinks(body.text, obs.finalUrl);
+    for (const link of links) {
+      if (!sameSite(link.href, base)) continue;
+      const role = roleForLink(link);
+      if (!role) continue;
+      candidates.push({ role, url: link.href, discoveredVia: { kind: "link", from: obs.id, text: link.text } });
+    }
+  }
+  // Prefer roles we have not seen yet, then keep a few extra docs pages.
+  const haveRole = new Set(observations.filter((o) => o.ok).map((o) => o.role));
+  // Onboarding pages come first whatever else was found: they decide which way an agent can start.
+  const rank = (c) => (c.role === "onboarding" ? -1 : Number(haveRole.has(c.role)));
+  candidates.sort((a, b) => rank(a) - rank(b));
+  let followed = 0;
+  const perRole = {};
+  for (const c of candidates) {
+    if (followed >= MAX_FOLLOW) break;
+    if ((perRole[c.role] || 0) >= MAX_PER_ROLE) continue;
+    const obs = await fetchOne(c.role, c.url, c.discoveredVia);
+    if (!obs) continue;
+    followed += 1;
+    perRole[c.role] = (perRole[c.role] || 0) + 1;
+  }
+
+  return { observations, bodies };
+}

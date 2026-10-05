@@ -1,0 +1,4 @@
+{
+  "task": "Find out what Tanso offers, whether an agent can evaluate it today, and how to request an evaluation without a human opening an inbox.",
+  "claims": { "web": true, "onboarding": false, "monetization": false }
+}

@@ -1,0 +1,1311 @@
+{
+  "schema": "agent-ready/scan@1",
+  "runId": "2026-09-09T21-00-00-fixture",
+  "target": {
+    "url": "https://tansohq.com"
+  },
+  "startedAt": "2026-09-10T03:59:13.981Z",
+  "finishedAt": "2026-09-10T03:59:48.294Z",
+  "provider": {
+    "name": "scan",
+    "version": "0.1.0",
+    "aeoReady": "run"
+  },
+  "available": true,
+  "aeo": {
+    "url": "https://tansohq.com",
+    "timestamp": "2026-09-10T03:59:47.239Z",
+    "averageScore": 89,
+    "benchmarks": {
+      "agenticSeo": {
+        "score": 77,
+        "maxScore": 100,
+        "grade": "B",
+        "categories": {
+          "discovery": {
+            "name": "Discovery",
+            "description": "Can agents find your documentation?",
+            "score": 22,
+            "maxScore": 25,
+            "percentage": 88,
+            "results": [
+              {
+                "id": "robots-txt",
+                "name": "Robots.txt AI Access",
+                "category": "discovery",
+                "score": 10,
+                "maxScore": 10,
+                "status": "pass",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "robots.txt found."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "No known AI crawlers are explicitly blocked."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "AI crawlers explicitly allowed: ClaudeBot, GPTBot, ChatGPT-User, Google-Extended, PerplexityBot"
+                  }
+                ]
+              },
+              {
+                "id": "llms-txt",
+                "name": "llms.txt Discovery Index",
+                "category": "discovery",
+                "score": 9,
+                "maxScore": 10,
+                "status": "pass",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "llms.txt found at llms.txt."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Found 13 documentation links."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Links include helpful descriptions."
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "No token count annotations found.",
+                    "fix": "Add token counts to help agents make context budget decisions:\n- [API Reference](/docs/api): Full REST API documentation (12K tokens)"
+                  },
+                  {
+                    "severity": "info",
+                    "message": "llms.txt is 650 tokens (under 5K limit)."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Organized into 7 sections."
+                  }
+                ]
+              },
+              {
+                "id": "agents-md",
+                "name": "AGENTS.md / CLAUDE.md",
+                "category": "discovery",
+                "score": 3,
+                "maxScore": 5,
+                "status": "warn",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "Found AGENTS.md."
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "Missing project structure information.",
+                    "fix": "Add a section describing key directories and file locations."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Contains links to documentation or APIs."
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "No coding conventions or patterns described.",
+                    "fix": "Add preferred patterns, naming conventions, and coding standards for agents to follow."
+                  }
+                ]
+              }
+            ]
+          },
+          "content-structure": {
+            "name": "Content Structure",
+            "description": "Is content machine-readable and well-organized?",
+            "score": 19,
+            "maxScore": 25,
+            "percentage": 76,
+            "results": [
+              {
+                "id": "content-structure",
+                "name": "Content Structure Quality",
+                "category": "content-structure",
+                "score": 9,
+                "maxScore": 15,
+                "status": "warn",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "Heading hierarchy is consistent across pages."
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "Few pages (1/20) contain code examples.",
+                    "fix": "Code examples are critical for agents. Add runnable examples for key operations."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "7 of 20 pages use tables for structured data."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Good use of semantic HTML elements (main, article, section)."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Pages generally lead with descriptive content."
+                  }
+                ]
+              },
+              {
+                "id": "markdown-availability",
+                "name": "Markdown Content Availability",
+                "category": "content-structure",
+                "score": 10,
+                "maxScore": 10,
+                "status": "pass",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "29 Markdown files available alongside 29 HTML files."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "HTML pages have good content-to-markup ratio."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Content is accessible without JavaScript rendering."
+                  }
+                ]
+              }
+            ]
+          },
+          "token-economics": {
+            "name": "Token Economics",
+            "description": "Does content fit within agent context windows?",
+            "score": 25,
+            "maxScore": 25,
+            "percentage": 100,
+            "results": [
+              {
+                "id": "token-budget",
+                "name": "Token Budget Analysis",
+                "category": "token-economics",
+                "score": 15,
+                "maxScore": 15,
+                "status": "pass",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "Average page size: 1,320 tokens (excellent)."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "No pages exceed 50K tokens."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "100% of pages are under 30K tokens."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Analyzed 58 pages. Total: 76,538 tokens."
+                  }
+                ]
+              },
+              {
+                "id": "meta-tags",
+                "name": "AI-Friendly Meta Tags",
+                "category": "token-economics",
+                "score": 10,
+                "maxScore": 10,
+                "status": "pass",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "20 of 20 pages include token count meta tags."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "20 of 20 pages have meaningful meta descriptions."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "20 of 20 pages have page type metadata."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Pages have clean, descriptive title tags."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "20 of 20 pages have canonical URLs."
+                  }
+                ]
+              }
+            ]
+          },
+          "capability-signaling": {
+            "name": "Capability Signaling",
+            "description": "Can agents understand what your APIs do?",
+            "score": 10,
+            "maxScore": 15,
+            "percentage": 67,
+            "results": [
+              {
+                "id": "skill-md",
+                "name": "Capability Signaling (skill.md)",
+                "category": "capability-signaling",
+                "score": 5,
+                "maxScore": 10,
+                "status": "warn",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "Found 1 skill file(s): skill.md"
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "skill.md: Missing name or description in frontmatter.",
+                    "fix": "Add YAML frontmatter with name and description fields."
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "skill.md: No capabilities section found.",
+                    "fix": "Add a \"## What I can accomplish\" section listing specific capabilities."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "skill.md: Documents required inputs."
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "skill.md: No constraints section.",
+                    "fix": "Add a \"## Constraints\" section with rate limits, token expiry, and other limitations."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "skill.md: Includes documentation links."
+                  }
+                ]
+              },
+              {
+                "id": "agent-permissions",
+                "name": "Agent Permissions Configuration",
+                "category": "capability-signaling",
+                "score": 5,
+                "maxScore": 5,
+                "status": "pass",
+                "findings": [
+                  {
+                    "severity": "info",
+                    "message": "Agent permissions file found at agent-permissions.json."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Valid JSON structure."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Defines allowed interactions or permissions."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "Includes rate limit configuration."
+                  }
+                ]
+              }
+            ]
+          },
+          "ux-bridge": {
+            "name": "UX Bridge",
+            "description": "Does the UX support human-agent workflows?",
+            "score": 1,
+            "maxScore": 10,
+            "percentage": 10,
+            "results": [
+              {
+                "id": "copy-for-ai",
+                "name": "Copy for AI UX",
+                "category": "ux-bridge",
+                "score": 1,
+                "maxScore": 10,
+                "status": "fail",
+                "findings": [
+                  {
+                    "severity": "warning",
+                    "message": "No \"Copy for AI\" buttons found.",
+                    "fix": "Add a \"Copy for AI\" button that copies clean Markdown or plain text to clipboard.\nThis bridges human and agent workflows when developers work inside AI assistants."
+                  },
+                  {
+                    "severity": "warning",
+                    "message": "No copy-to-clipboard buttons found for code blocks.",
+                    "fix": "Add copy buttons to code blocks. This is standard in modern documentation and helps both human and agent workflows."
+                  },
+                  {
+                    "severity": "info",
+                    "message": "4 of 20 pages link to raw or source views.",
+                    "fix": "Make Markdown source discoverable by adding \"View source\" or \"View as Markdown\" links."
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "available": true
+      },
+      "cloudflare": {
+        "score": 4,
+        "maxScore": 5,
+        "grade": "B",
+        "level": 4,
+        "checks": [
+          {
+            "status": "pass",
+            "id": "robotsTxt",
+            "message": "robots.txt exists with valid format"
+          },
+          {
+            "status": "pass",
+            "id": "sitemap",
+            "message": "sitemap.xml exists with valid structure (url: https://tansohq.com/sitemap.xml, from robots txt, format: xml)"
+          },
+          {
+            "status": "pass",
+            "id": "linkHeaders",
+            "message": "Found agent-useful Link relations: api-catalog (relationsFound: {\"rel\":\"api-catalog\",\"href\":\"/.well-known/api-catalog\"}, totalLinks: 4)"
+          },
+          {
+            "status": "pass",
+            "id": "markdownNegotiation",
+            "message": "Site supports Markdown for Agents (contentType: text/markdown; charset=utf-8)"
+          },
+          {
+            "status": "pass",
+            "id": "robotsTxtAiRules",
+            "message": "Found rules for AI bots: gptbot, chatgpt-user, google-extended, ccbot, bytespider, perplexitybot (botsFound: gptbot, chatgpt-user, google-extended, ccbot, bytespider, perplexitybot)"
+          },
+          {
+            "status": "pass",
+            "id": "contentSignals",
+            "message": "Content Signals found in robots.txt (signals: {\"userAgent\":\"*\",\"path\":null,\"aiTrain\":\"no\"}, {\"userAgent\":\"*\",\"path\":null,\"search\":\"yes\"}, {\"userAgent\":\"*\",\"path\":null,\"aiInput\":\"yes\"}, signalCount: 3)"
+          },
+          {
+            "status": "ok",
+            "id": "webBotAuth",
+            "message": "Web Bot Auth directory not found (informational only)"
+          },
+          {
+            "status": "pass",
+            "id": "apiCatalog",
+            "message": "API Catalog found with 1 API listed (apiCount: 1, linksetEntries: 1, correct content type)"
+          },
+          {
+            "status": "pass",
+            "id": "webMcp",
+            "message": "Found 1 WebMCP tool via navigator.modelContext: get_tanso_info (toolCount: 1, tools: get_tanso_info, detectionMethod: imperative_api)"
+          },
+          {
+            "status": "ok",
+            "id": "x402",
+            "message": "x402 payment protocol not detected (not a commerce site)"
+          },
+          {
+            "status": "ok",
+            "id": "mpp",
+            "message": "MPP payment discovery not detected (not a commerce site)"
+          },
+          {
+            "status": "ok",
+            "id": "ucp",
+            "message": "UCP profile not found (not a commerce site)"
+          },
+          {
+            "status": "ok",
+            "id": "acp",
+            "message": "ACP discovery document not found (not a commerce site)"
+          },
+          {
+            "status": "ok",
+            "id": "ap2",
+            "message": "AP2 not detected (no A2A Agent Card) (not a commerce site)"
+          }
+        ],
+        "categories": {
+          "discoverability": {
+            "name": "Discoverability",
+            "score": 3,
+            "maxScore": 4,
+            "percentage": 75
+          },
+          "content-accessibility": {
+            "name": "Content Accessibility",
+            "score": 1,
+            "maxScore": 1,
+            "percentage": 100
+          },
+          "bot-access-control": {
+            "name": "Bot Access Control",
+            "score": 2,
+            "maxScore": 2,
+            "percentage": 100
+          },
+          "api-auth-mcp-a-a-discovery": {
+            "name": "API, Auth, MCP & A2A Discovery",
+            "score": 2,
+            "maxScore": 9,
+            "percentage": 22
+          },
+          "commerce": {
+            "name": "Commerce",
+            "score": 0,
+            "maxScore": 0,
+            "percentage": null
+          }
+        },
+        "available": true
+      },
+      "fern": {
+        "score": 92,
+        "maxScore": 100,
+        "grade": "A",
+        "categories": {
+          "content-discoverability": {
+            "name": "Content Discoverability",
+            "score": 3,
+            "maxScore": 7,
+            "percentage": 43
+          },
+          "markdown-availability": {
+            "name": "Markdown Availability",
+            "score": 1,
+            "maxScore": 2,
+            "percentage": 50
+          },
+          "page-size": {
+            "name": "Page Size and Truncation Risk",
+            "score": 2,
+            "maxScore": 4,
+            "percentage": 50
+          },
+          "content-structure": {
+            "name": "Content Structure",
+            "score": 3,
+            "maxScore": 3,
+            "percentage": 100
+          },
+          "url-stability": {
+            "name": "URL Stability and Redirects",
+            "score": 2,
+            "maxScore": 2,
+            "percentage": 100
+          },
+          "observability": {
+            "name": "Observability and Content Health",
+            "score": 2,
+            "maxScore": 3,
+            "percentage": 67
+          },
+          "authentication": {
+            "name": "Authentication and Access",
+            "score": 1,
+            "maxScore": 2,
+            "percentage": 50
+          }
+        },
+        "checks": [
+          {
+            "id": "llms-txt-exists",
+            "status": "pass",
+            "message": "llms.txt found at https://tansohq.com/llms.txt"
+          },
+          {
+            "id": "llms-txt-valid",
+            "status": "warn",
+            "message": "llms.txt contains parseable links but doesn't fully follow the proposed structure: https://tansohq.com/llms.txt: No H1 heading found, No blockquote summary found"
+          },
+          {
+            "id": "llms-txt-size",
+            "status": "pass",
+            "message": "llms.txt is 2,833 characters (under 50,000 threshold)"
+          },
+          {
+            "id": "llms-txt-links-resolve",
+            "status": "pass",
+            "message": "All 11 same-origin links resolve (13 total links)"
+          },
+          {
+            "id": "llms-txt-links-markdown",
+            "status": "warn",
+            "message": "Same-origin links point to HTML, but 2 have .md variants available (2 external links excluded)"
+          },
+          {
+            "id": "llms-txt-directive-html",
+            "status": "warn",
+            "message": "llms.txt directive found in HTML of 33 of 35 pages (2 missing); 1 failed to fetch"
+          },
+          {
+            "id": "llms-txt-directive-md",
+            "status": "warn",
+            "message": "llms.txt directive found in markdown of 26 of 32 pages (6 missing); 4 had no markdown version"
+          },
+          {
+            "id": "markdown-url-support",
+            "status": "pass",
+            "message": "32/35 pages support .md URLs (91%)"
+          },
+          {
+            "id": "content-negotiation",
+            "status": "warn",
+            "message": "Content negotiation partially supported: 31 correct type, 0 wrong type, 4 HTML only; 1 returned error pages"
+          },
+          {
+            "id": "rendering-strategy",
+            "status": "pass",
+            "message": "All 36 pages contain server-rendered content"
+          },
+          {
+            "id": "page-size-markdown",
+            "status": "pass",
+            "message": "All 32 pages under 50K chars (median 5K, max 15K)"
+          },
+          {
+            "id": "page-size-html",
+            "status": "fail",
+            "message": "1 of 36 pages convert to over 100K chars (max 28K HTML \u2192 2011K markdown (62% boilerplate))"
+          },
+          {
+            "id": "content-start-position",
+            "status": "fail",
+            "message": "1 of 36 pages have content starting past 50% (worst 100%)"
+          },
+          {
+            "id": "tabbed-content-serialization",
+            "status": "pass",
+            "message": "No tabbed content detected across 36 pages"
+          },
+          {
+            "id": "section-header-quality",
+            "status": "pass",
+            "message": "No tabbed content found; header quality check not applicable"
+          },
+          {
+            "id": "markdown-code-fence-validity",
+            "status": "pass",
+            "message": "All 3 code fences properly closed across 33 pages"
+          },
+          {
+            "id": "http-status-codes",
+            "status": "pass",
+            "message": "All 36 pages return proper error codes for bad URLs"
+          },
+          {
+            "id": "redirect-behavior",
+            "status": "pass",
+            "message": "No redirects detected across 36 pages"
+          },
+          {
+            "id": "llms-txt-coverage",
+            "status": "fail",
+            "message": "llms.txt covers 3/9 sitemap doc pages (33%); 6 missing; 5 llms.txt links not in sitemap (may indicate stale links or incomplete sitemap)"
+          },
+          {
+            "id": "markdown-content-parity",
+            "status": "pass",
+            "message": "All 31 pages have equivalent markdown and HTML content (avg 0% missing); 1 failed to fetch"
+          },
+          {
+            "id": "cache-header-hygiene",
+            "status": "pass",
+            "message": "All 37 endpoints have appropriate cache headers"
+          },
+          {
+            "id": "auth-gate-detection",
+            "status": "pass",
+            "message": "All 36 pages are publicly accessible"
+          },
+          {
+            "id": "auth-alternative-access",
+            "status": "skip",
+            "message": "All docs pages are publicly accessible; no alternative access paths needed"
+          }
+        ],
+        "available": true
+      },
+      "vercel": {
+        "score": 100,
+        "maxScore": 100,
+        "grade": "A",
+        "categories": {
+          "can_agents_reach_you": {
+            "name": "can agents reach you",
+            "score": 3,
+            "maxScore": 3,
+            "percentage": 100
+          },
+          "can_agents_find_you": {
+            "name": "can agents find you",
+            "score": 8,
+            "maxScore": 8,
+            "percentage": 100
+          },
+          "can_agents_read_you": {
+            "name": "can agents read you",
+            "score": 9,
+            "maxScore": 9,
+            "percentage": 100
+          },
+          "is_your_html_agent_friendly": {
+            "name": "is your html agent friendly",
+            "score": 5,
+            "maxScore": 5,
+            "percentage": 100
+          }
+        },
+        "checks": [
+          {
+            "id": "Soft 404 detection",
+            "status": "pass",
+            "message": "404"
+          },
+          {
+            "id": "Auth gate detection",
+            "status": "pass",
+            "message": "Agents cannot authenticate through SSO or login flows"
+          },
+          {
+            "id": "Redirect behavior",
+            "status": "pass",
+            "message": "Claude Code aborts fetches that redirect to a different host"
+          },
+          {
+            "id": "llms.txt",
+            "status": "pass",
+            "message": "3 KB (~708 tokens)"
+          },
+          {
+            "id": "llms.txt links resolve",
+            "status": "pass",
+            "message": "5/5 links OK"
+          },
+          {
+            "id": "llms.txt size",
+            "status": "pass",
+            "message": "3 KB (~708 tokens)"
+          },
+          {
+            "id": "llms.txt valid",
+            "status": "pass",
+            "message": "Follow llmstxt.org format \u2014 H1 title, blockquote summary, [name](url) links"
+          },
+          {
+            "id": "sitemap.xml",
+            "status": "pass",
+            "message": "Add <lastmod> dates so agents know when content was last changed"
+          },
+          {
+            "id": "sitemap.md",
+            "status": "pass",
+            "message": "Create /sitemap.md \u2014 a markdown sitemap agents can read without parsing XML"
+          },
+          {
+            "id": "robots.txt",
+            "status": "pass",
+            "message": "Allow GPTBot, ClaudeBot, CCBot, Google-Extended \u2014 blocking them removes you from AI search"
+          },
+          {
+            "id": "Structured data",
+            "status": "pass",
+            "message": "JSON-LD Organization"
+          },
+          {
+            "id": "Agent UA \u2192 markdown",
+            "status": "pass",
+            "message": "Detect AI User-Agent headers and return markdown \u2014 agents waste tokens parsing HTML"
+          },
+          {
+            "id": "Accept header \u2192 markdown",
+            "status": "pass",
+            "message": "Serve markdown for Accept: text/markdown \u2014 used by Claude Code, Cursor, and OpenCode"
+          },
+          {
+            "id": "Vary: Accept",
+            "status": "pass",
+            "message": "Set Vary: Accept \u2014 without it CDNs serve cached HTML to agents or markdown to browsers"
+          },
+          {
+            "id": ".md URL \u2192 markdown",
+            "status": "pass",
+            "message": "Serve markdown at {url}.md \u2014 works without custom headers, easy to copy into chat"
+          },
+          {
+            "id": "Markdown link alternate",
+            "status": "pass",
+            "message": "Add <link rel=\"alternate\" type=\"text/markdown\"> \u2014 signals markdown availability to agents"
+          },
+          {
+            "id": "Frontmatter",
+            "status": "pass",
+            "message": "Add frontmatter (title, description, canonical_url, last_updated) \u2014 agents need it for attribution and staleness. canonical_url may instead be a Link: rel=\"canonical\" response header"
+          },
+          {
+            "id": "Missing page \u2192 markdown",
+            "status": "pass",
+            "message": "Return a real 404 or 410 with a short markdown body linking to discovery files"
+          },
+          {
+            "id": "Page size (markdown)",
+            "status": "pass",
+            "message": "8 KB (~2k tokens)"
+          },
+          {
+            "id": "Code fence validity",
+            "status": "pass",
+            "message": "0 fences"
+          },
+          {
+            "id": "Server-rendered content",
+            "status": "pass",
+            "message": "5/5 pages"
+          },
+          {
+            "id": "Page size (HTML text)",
+            "status": "pass",
+            "message": "5/5 pages under 100K chars"
+          },
+          {
+            "id": "Heading structure",
+            "status": "pass",
+            "message": "4/5 pages"
+          },
+          {
+            "id": "Meta description",
+            "status": "pass",
+            "message": "5/5 pages"
+          },
+          {
+            "id": "Canonical URL",
+            "status": "pass",
+            "message": "5/5 pages"
+          }
+        ],
+        "available": true
+      },
+      "agentgrade": {
+        "score": 98,
+        "maxScore": 100,
+        "grade": "A+",
+        "categories": {
+          "OpenAPI": {
+            "name": "OpenAPI spec",
+            "score": 6,
+            "maxScore": 6,
+            "percentage": 100
+          },
+          "llms.txt": {
+            "name": "llms.txt",
+            "score": 2,
+            "maxScore": 2,
+            "percentage": 100
+          },
+          "llms-full.txt": {
+            "name": "llms-full.txt",
+            "score": 2,
+            "maxScore": 2,
+            "percentage": 100
+          },
+          "Homepage & Meta": {
+            "name": "Homepage & Meta",
+            "score": 9,
+            "maxScore": 9,
+            "percentage": 100
+          },
+          "Skills": {
+            "name": "Skill file",
+            "score": 1,
+            "maxScore": 2,
+            "percentage": 50
+          },
+          "agents.txt": {
+            "name": "agents.txt",
+            "score": 1,
+            "maxScore": 1,
+            "percentage": 100
+          },
+          "robots.txt": {
+            "name": "robots.txt directives",
+            "score": 3,
+            "maxScore": 3,
+            "percentage": 100
+          },
+          "Content Negotiation": {
+            "name": "Content negotiation",
+            "score": 7,
+            "maxScore": 7,
+            "percentage": 100
+          },
+          "Infrastructure": {
+            "name": "Infrastructure",
+            "score": 4,
+            "maxScore": 4,
+            "percentage": 100
+          },
+          "Content Quality": {
+            "name": "Content quality",
+            "score": 3,
+            "maxScore": 3,
+            "percentage": 100
+          },
+          "Web Bot Auth": {
+            "name": "Bot authentication",
+            "score": 0,
+            "maxScore": 0,
+            "percentage": 0
+          },
+          "A2A": {
+            "name": "A2A (Agent-to-Agent)",
+            "score": 1,
+            "maxScore": 1,
+            "percentage": 100
+          },
+          "WebMCP": {
+            "name": "WebMCP",
+            "score": 1,
+            "maxScore": 1,
+            "percentage": 100
+          },
+          "Identity": {
+            "name": "Identity",
+            "score": 0,
+            "maxScore": 0,
+            "percentage": 0
+          }
+        },
+        "checks": [
+          {
+            "id": "OpenAPI spec found",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Paths defined",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Paths reachable",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Response matches spec",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Version identified",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Title present",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "x-payment-info declared",
+            "status": "fail",
+            "message": "Add `x-payment-info` to paid OpenAPI operations: `\"x-payment-info\": { \"protocols\": [...], \"price\": { \"amount\": \"0.50\", \"currency\": \"USD\" } }`. Helps agents discover pricing before triggering a 402."
+          },
+          {
+            "id": "llms.txt found",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Markdown structure",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "References OpenAPI spec",
+            "status": "fail",
+            "message": "Link the OpenAPI spec path (e.g. `/openapi.json`) from `llms.txt` so agents and search engines find the machine-readable API surface directly. See https://agentgrade.com/kb/llms-txt#cross-references."
+          },
+          {
+            "id": "References skill.md",
+            "status": "fail",
+            "message": "Reference your `skill.md` (e.g. `/skill.md`) from `llms.txt` so agents that prefer the SKILL playbook over narrative context can find it. See https://agentgrade.com/kb/llms-txt#cross-references."
+          },
+          {
+            "id": "References A2A agent card",
+            "status": "fail",
+            "message": "Reference your A2A agent card (e.g. `/.well-known/agent.json`) from `llms.txt` so peer agents discover the card via the same index. See https://agentgrade.com/kb/llms-txt#cross-references."
+          },
+          {
+            "id": "References WebMCP manifest",
+            "status": "fail",
+            "message": "Mention WebMCP (e.g. `/.well-known/webmcp.json`) in `llms.txt` so browser-based agents reading the index discover the manifest. See https://agentgrade.com/kb/llms-txt#cross-references."
+          },
+          {
+            "id": "References llms-full.txt",
+            "status": "fail",
+            "message": "Link to `/llms-full.txt` from `llms.txt` so RAG pipelines that fetch the index know the full-text companion exists. See https://agentgrade.com/kb/llms-txt#cross-references."
+          },
+          {
+            "id": "llms-full.txt found",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "llms-full.txt linked from HTML",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "llms.txt linked from HTML",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "JSON-LD structured data",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Organization JSON-LD",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "sameAs entity links",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "og:image declared",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "og:image reachable",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "twitter:card set",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Favicon SVG",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Favicon PNG",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Skill file found",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Frontmatter valid",
+            "status": "fail",
+            "message": "Your `/skill.md` frontmatter is invalid: missing name. `name` must be 1-64 chars, lowercase alphanumeric with single hyphens (e.g. `scan-url`). `description` must be 1-1024 chars."
+          },
+          {
+            "id": "agents.txt found",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Agents allowed",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "No AI agents blocked",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Google-Extended not blocked",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Agent UA gets non-HTML",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Accept: JSON returns JSON",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Accept: text returns text",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Accept: markdown returns markdown",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Returns preferred Content-Type",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Inline content negotiation",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Vary: Accept set on negotiated response",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "HTTPS redirect",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Sitemap.xml",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Cache headers",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Structured errors (JSON 404)",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Rate limit headers",
+            "status": "fail",
+            "message": "(Optional) Return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, or `Retry-After` headers so agents can self-throttle. See https://agentgrade.com/kb/infrastructure."
+          },
+          {
+            "id": "Canonical URL",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Schema.org types",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "RSS/Atom feed",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Signatures directory published",
+            "status": "fail",
+            "message": "Serve `/.well-known/http-message-signatures-directory` with a JSON object listing your agent identity and public keys (RFC 9421)."
+          },
+          {
+            "id": "Members declared",
+            "status": "fail",
+            "message": "Add a `members` array to your signatures directory with at least one entry containing `name` and `publicKeyUrl`."
+          },
+          {
+            "id": "Public keys available",
+            "status": "fail",
+            "message": "Each member in your signatures directory should have a `publicKeyUrl` pointing to a fetchable public key for signature verification."
+          },
+          {
+            "id": "Agent Card published",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Agent Card verified",
+            "status": "fail",
+            "message": "(Optional) Ensure your Agent Card contains at least `name` and `url` fields so agents can identify and connect to your service. See https://agentgrade.com/kb/a2a."
+          },
+          {
+            "id": "WebMCP manifest",
+            "status": "pass",
+            "message": ""
+          },
+          {
+            "id": "Form tool annotations",
+            "status": "fail",
+            "message": "(Optional) Add `tool-name` and `tool-description` attributes to `<form>` elements so browser AI agents can invoke them as structured tools. See https://agentgrade.com/kb/webmcp."
+          },
+          {
+            "id": "WebFinger",
+            "status": "fail",
+            "message": ""
+          },
+          {
+            "id": "DID Document",
+            "status": "fail",
+            "message": ""
+          },
+          {
+            "id": "Nostr NIP-05",
+            "status": "fail",
+            "message": ""
+          },
+          {
+            "id": "AT Protocol DID",
+            "status": "fail",
+            "message": ""
+          },
+          {
+            "id": "Apple App Links",
+            "status": "fail",
+            "message": ""
+          },
+          {
+            "id": "Android Asset Links",
+            "status": "fail",
+            "message": ""
+          }
+        ],
+        "available": true
+      }
+    }
+  },
+  "aeoWarnings": [],
+  "aeoError": null,
+  "probes": [
+    {
+      "id": "robots_ai",
+      "status": "pass",
+      "detail": "robots.txt allows GPTBot, ClaudeBot, ChatGPT-User, PerplexityBot, CCBot, Google-Extended; points to /llms.txt",
+      "url": "https://tansohq.com/robots.txt",
+      "http": {
+        "method": "GET",
+        "status": 200
+      }
+    },
+    {
+      "id": "agent_json",
+      "status": "pass",
+      "detail": "/.well-known/agent.json present (name, url, description, availability, demo, request_access, open_source, hosted_billing_api)",
+      "url": "https://tansohq.com/.well-known/agent.json",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "data": {
+        "path": "/.well-known/agent.json",
+        "keys": [
+          "name",
+          "url",
+          "description",
+          "availability",
+          "demo",
+          "request_access",
+          "open_source",
+          "hosted_billing_api",
+          "hosted_mcp_server",
+          "contact",
+          "docs",
+          "integration_guide"
+        ]
+      }
+    },
+    {
+      "id": "llms_txt",
+      "status": "pass",
+      "detail": "/llms.txt 2.8 KB, 13 links (7 to .md)",
+      "url": "https://tansohq.com/llms.txt",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "data": {
+        "bytes": 2833,
+        "links": 13,
+        "mdLinks": 7
+      }
+    },
+    {
+      "id": "openapi",
+      "status": "pass",
+      "detail": "/openapi.json: OpenAPI 3.1.0, 2 paths",
+      "url": "https://tansohq.com/openapi.json",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "data": {
+        "path": "/openapi.json",
+        "version": "3.1.0",
+        "paths": [
+          "/api/agent",
+          "/api/evaluation-request"
+        ]
+      }
+    },
+    {
+      "id": "pricing_json",
+      "status": "warn",
+      "detail": "/pricing.json exists but is not agent-serve pricing.json (missing $schema, revenue_model, plans)",
+      "url": "https://tansohq.com/pricing.json",
+      "http": {
+        "method": "GET",
+        "status": 200
+      },
+      "data": {
+        "missing": [
+          "$schema",
+          "revenue_model",
+          "plans"
+        ],
+        "keys": [
+          "name",
+          "url",
+          "product",
+          "open_source"
+        ]
+      }
+    },
+    {
+      "id": "catalog_pricing",
+      "status": "skip",
+      "detail": "no catalog slug given (--catalog-slug)"
+    },
+    {
+      "id": "captcha",
+      "status": "skip",
+      "detail": "no signup page found at /signup, /sign-up, /register, /auth/signup, /auth/register, /get-started"
+    },
+    {
+      "id": "signup_endpoint",
+      "status": "warn",
+      "detail": "no JSON signup endpoint discoverable (pricing.json, OpenAPI, or OPTIONS on common paths)",
+      "url": "https://tansohq.com/v1/accounts",
+      "http": {
+        "method": "OPTIONS",
+        "status": 0
+      }
+    },
+    {
+      "id": "http_402",
+      "status": "warn",
+      "detail": "OpenAPI documents no purchase, subscription or credits endpoint",
+      "url": "https://tansohq.com/openapi.json",
+      "http": {
+        "method": "GET",
+        "status": 200
+      }
+    }
+  ],
+  "note": "Live scan of tansohq.com on 2026-09-09 (aeo-ready benchmarks + probes), kept as a fixture."
+}

@@ -1,0 +1,89 @@
+{
+  "schema": "agent-ready/crash@1",
+  "runId": "2026-09-09T21-00-00-fixture",
+  "target": {
+    "url": "https://tansohq.com"
+  },
+  "startedAt": "2026-09-10T04:10:14.663Z",
+  "finishedAt": "2026-09-10T04:10:26.672Z",
+  "provider": {
+    "name": "crash",
+    "version": "0.1.0",
+    "mode": "smoke"
+  },
+  "available": true,
+  "mode": "smoke",
+  "persona": "scripted walk (no LLM)",
+  "task": "",
+  "flows": [
+    {
+      "id": "discover",
+      "result": "PASS",
+      "human_interventions": 0,
+      "quote": "Found /llms.txt, /.well-known/agent.json, /pricing.json, /openapi.json without opening a page.",
+      "http": {
+        "method": "GET",
+        "url": "https://tansohq.com/llms.txt",
+        "status": 200
+      },
+      "screenshot": "screenshots/01-discover-home.png"
+    },
+    {
+      "id": "understand",
+      "result": "PASS",
+      "human_interventions": 0,
+      "quote": "pricing.json exists and is parseable; it declares no plans, so there is nothing to price yet, and it says so in a form I can read.",
+      "http": {
+        "method": "GET",
+        "url": "https://tansohq.com/pricing.json",
+        "status": 200
+      },
+      "screenshot": "screenshots/02-understand-pricing.png"
+    },
+    {
+      "id": "signup",
+      "result": "SKIP",
+      "human_interventions": 0,
+      "quote": "No signup form found at /signup, /sign-up, /register, /auth/signup, /get-started, /start; nothing to walk in smoke mode."
+    },
+    {
+      "id": "access",
+      "result": "SKIP",
+      "human_interventions": 0,
+      "quote": "Not attempted in smoke mode."
+    },
+    {
+      "id": "pay",
+      "result": "SKIP",
+      "human_interventions": 0,
+      "quote": "Not attempted in smoke mode."
+    },
+    {
+      "id": "use",
+      "result": "SKIP",
+      "human_interventions": 0,
+      "quote": "Not attempted in smoke mode."
+    },
+    {
+      "id": "manage",
+      "result": "SKIP",
+      "human_interventions": 0,
+      "quote": "Not attempted in smoke mode."
+    }
+  ],
+  "findings": [
+    {
+      "flow": "understand",
+      "grade": "F-low",
+      "text": "pricing.json has no plans array; agents can read availability but cannot compare a price.",
+      "command": "GET https://tansohq.com/pricing.json \u2192 200"
+    }
+  ],
+  "worked": [
+    "Machine-readable front door: /llms.txt, /.well-known/agent.json, /pricing.json, /openapi.json",
+    "pricing.json states availability machine-readably"
+  ],
+  "human_interventions": 0,
+  "human_assist": false,
+  "understood": true
+}
