@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { writeFileSync, createWriteStream } from "node:fs";
 import { secretsInText } from "../secrets.js";
+import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 
 // Executor: Claude Code in print mode. Disposable by design; see executors/README in the interface comment of
@@ -38,7 +39,9 @@ function normalize(event, redact) {
 
 const isLocalHost = (host) => host === "localhost" || /^127\.\d+\.\d+\.\d+$/.test(host);
 
-export function settingsFor({ network, tools }) {
+const GUARD = fileURLToPath(new URL("./identity-guard.mjs", import.meta.url));
+
+export function settingsFor({ network, tools, allowedEmails = [] }) {
   // WebFetch: default-deny, then allow the task's domains. Bash: Seatbelt sandbox with a strict outbound allowlist,
   // and the run fails rather than proceeding unsandboxed. Docs: code.claude.com/docs/en/sandboxing.md, permissions.md.
   return {
@@ -56,6 +59,8 @@ export function settingsFor({ network, tools }) {
       // is on only when the target itself is local. Docs: code.claude.com/docs/en/sandboxing.md.
       network: { allowedDomains: network, strictAllowlist: true, ...(network.some(isLocalHost) ? { allowLocalBinding: true } : {}) },
     },
+    // Enforced, not asked: every command, fetch and written file is checked for an email that is not the test identity's.
+    hooks: { PreToolUse: [{ matcher: "Bash|WebFetch|Write|Edit|MultiEdit", hooks: [{ type: "command", command: [process.execPath, GUARD, ...allowedEmails].map((a) => JSON.stringify(a)).join(" ") }] }] },
   };
 }
 
@@ -75,8 +80,8 @@ export function argsFor({ prompt, maxTurns, settingsPath, tools, model = null })
   return args;
 }
 
-export async function run({ prompt, workDir, childEnv, tools, network, maxTurns, model, redact, learn = () => {}, onEvent, timeoutMs = DEFAULT_TIMEOUT_MS, idleMs = DEFAULT_IDLE_MS }) {
-  const settings = settingsFor({ network, tools });
+export async function run({ prompt, workDir, childEnv, tools, network, maxTurns, model, redact, learn = () => {}, onEvent, allowedEmails = [], timeoutMs = DEFAULT_TIMEOUT_MS, idleMs = DEFAULT_IDLE_MS }) {
+  const settings = settingsFor({ network, tools, allowedEmails });
   const settingsPath = join(workDir, "executor-settings.json");
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
   const args = argsFor({ prompt, maxTurns, settingsPath, tools, model });

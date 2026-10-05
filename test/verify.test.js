@@ -11,7 +11,7 @@ import { renderVerify } from "../src/verify/render.js";
 import { makeStyle } from "../src/audit/render.js";
 import { runHarness } from "../src/harness/index.js";
 import { EXECUTORS } from "../src/harness/execute.js";
-import { secretsInText } from "../src/harness/secrets.js";
+import { secretsInText, secretsInMail } from "../src/harness/secrets.js";
 import { chmodSync, mkdirSync } from "node:fs";
 import { argsFor, settingsFor, run as runClaudePrint } from "../src/harness/executors/claude-print.js";
 import { readConfig, writeConfig } from "../src/audit/config.js";
@@ -159,6 +159,31 @@ describe("verify: what the agent inherits and what stays on disk", () => {
   it("opens localhost to the agent only when the product itself is local", () => {
     assert.equal(settingsFor({ network: ["acme.dev", "api.acme.dev"], tools: ["Bash"] }).sandbox.network.allowLocalBinding, undefined);
     assert.equal(settingsFor({ network: networkFor("http://localhost:4321/", { url: "http://localhost:4321/v1/me" }), tools: ["Bash"] }).sandbox.network.allowLocalBinding, true);
+  });
+
+  it("the agent's commands may carry only the test identity's email, enforced by a hook", () => {
+    const guard = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "harness", "executors", "identity-guard.mjs");
+    const run = (command, allowed) => spawnSync(process.execPath, [guard, ...allowed], { input: JSON.stringify({ tool_input: { command } }), encoding: "utf8" });
+    const real = run('curl -d \'{"human_email":"someone.real@gmail.com"}\' https://inkbox.ai/api/v1/agent-signup/', ["ari@agentmail.to"]);
+    assert.equal(real.status, 2);
+    assert.match(real.stderr, /not the test identity's \(someone\.real@gmail\.com\)/);
+    assert.equal(run('curl -d \'{"email":"ari@agentmail.to","hint":"you@example.com"}\' https://x.dev', ["ari@agentmail.to"]).status, 0);
+    assert.equal(run("curl https://x.dev -d email=anyone@company.dev", []).status, 2, "with no inbox, no address at all");
+    // A script written with the address, then run with a command that has none, is caught when it is written.
+    const write = (file_path, content) => spawnSync(process.execPath, [guard, "ari@agentmail.to"], { input: JSON.stringify({ tool_input: { file_path, content } }), encoding: "utf8" });
+    assert.equal(write("/run/work/signup.py", 'payload = {"email": "someone.real@gmail.com"}').status, 2);
+    assert.equal(write("/run/work/RESULT.md", "Support: support@inkbox.ai").status, 0, "the agent's notes may quote a product's address");
+    const hook = settingsFor({ network: ["acme.dev"], tools: ["Bash"], allowedEmails: ["ari@agentmail.to"] }).hooks.PreToolUse[0];
+    assert.equal(hook.matcher, "Bash|WebFetch|Write|Edit|MultiEdit");
+    assert.match(hook.hooks[0].command, /identity-guard\.mjs" "ari@agentmail\.to"$/);
+  });
+
+  it("finds claim codes and one-time links in mail", () => {
+    const cosmic = 'Your one-time claim code is 837777 (expires in 15 minutes). Paste this code back to the agent, or visit https://u6979756.ct.sendgrid.net/ls/click?upn=u001.cJWr-2FR-2FBTopcTpj7ZZUDozDf9tDhksc052zjhdPAWyhSE to claim it.';
+    const found = secretsInMail(cosmic);
+    assert.ok(found.includes("837777"), found.join(", "));
+    assert.ok(found.some((v) => v.startsWith("https://u6979756.ct.sendgrid.net/")));
+    assert.deepEqual(secretsInMail("Welcome to Acme. Questions? See https://acme.dev/docs"), []);
   });
 
   it("finds one-time tokens in links, not short page numbers", () => {

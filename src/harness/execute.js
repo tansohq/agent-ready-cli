@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, existsSync, readFileSync, readdirSync, statSy
 import { join, relative } from "node:path";
 import * as claudePrint from "./executors/claude-print.js";
 import { personaInstructions } from "./persona.js";
-import { secretsInText } from "./secrets.js";
+import { secretsInMail } from "./secrets.js";
 
 // Executor interface. Any replacement (Agent SDK, another agent) implements:
 //   name: string
@@ -109,7 +109,7 @@ export async function execute({ task, runId, doc, workDir, credentials, mode, pe
     events.push(entry);
     log(entry);
   };
-  const run = await executor.run({ prompt, workDir, childEnv: credentials.childEnv, tools: EXECUTOR_TOOLS, network: task.network, maxTurns, model, redact: credentials.redact, learn: credentials.learn, onEvent });
+  const run = await executor.run({ prompt, workDir, childEnv: credentials.childEnv, tools: EXECUTOR_TOOLS, network: task.network, maxTurns, model, redact: credentials.redact, learn: credentials.learn, onEvent, allowedEmails: persona?.email ? [persona.email] : [] });
   const extra = await afterRun();
 
   // If the agent acquired a key, learn its value now so everything written from here on is scrubbed of it.
@@ -118,7 +118,7 @@ export async function execute({ task, runId, doc, workDir, credentials, mode, pe
   for (const v of acquiredValues(workDir)) credentials.learn(v);
   // Mail arrives through the inbox poller, not the agent's output, so its links are learned here.
   const inboxDir = join(workDir, "inbox");
-  if (existsSync(inboxDir)) for (const f of readdirSync(inboxDir)) for (const v of secretsInText(readFileSync(join(inboxDir, f), "utf8"))) credentials.learn(v);
+  if (existsSync(inboxDir)) for (const f of readdirSync(inboxDir)) for (const v of secretsInMail(readFileSync(join(inboxDir, f), "utf8"))) credentials.learn(v);
   // trace.jsonl was written live, before the acquired value was known: scrub it again now.
   const scrubbed = scrubWorkDir(workDir, credentials.redact);
   for (const e of events) for (const k of ["text", "input"]) if (typeof e[k] === "string") e[k] = credentials.redact(e[k]);

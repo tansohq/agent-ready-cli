@@ -27,6 +27,16 @@ export function secretsInText(text) {
   return [...new Set([...[...t.matchAll(SECRET_FIELD)].map((m) => m[2]), ...[...t.matchAll(SECRET_PARAM)].map((m) => m[2])])];
 }
 
+// Mail adds two kinds a product sends a person: a short code after words like "code" or "OTP" (Cosmic's "Your
+// one-time claim code is 837777"), and links, which in these emails are one-time (Cosmic's claim link was a
+// click-tracking redirect with nothing in it that says "claim"). Any link of 60 characters or more counts.
+const MAIL_CODE = /\b(?:code|otp|passcode|pin)\b[^0-9\n]{0,40}?\b(\d{4,8})\b/gi;
+const MAIL_LINK = /https?:\/\/[^\s"'<>\\)\]]{52,}/g;
+export function secretsInMail(text) {
+  const t = String(text ?? "");
+  return [...new Set([...secretsInText(t), ...[...t.matchAll(MAIL_CODE)].map((m) => m[1]), ...(t.match(MAIL_LINK) || [])])];
+}
+
 export function resolveCredentials(task, env = process.env) {
   const injected = {};
   const missing = [];

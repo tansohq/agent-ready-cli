@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6 (2026-10-05)
+
+- The testing agent can no longer use a real person's email address. Claude Code tells the model the signed-in account's email, and two runs (Inkbox, Edge Network) gave it to the product as the account's human contact, one through a script the agent wrote and then ran. A PreToolUse hook now refuses any command, request or written file (other than the agent's own notes) that carries an address other than the test identity's; placeholder domains such as example.com are allowed. The persona instructions say the same. Checked with a real `claude -p` run.
+- Mail is scrubbed of short codes after "code", "OTP", "passcode" or "PIN" and of long links, which in these emails are one-time: a Cosmic run had kept its claim code and a click-tracking claim link.
+
 ## 0.1.5 (2026-10-05)
 
 - `verify` with `AGENTMAIL_API_KEY` set gives each run its own inbox and deletes it afterwards; documented in the README. Real runs: Cosmic (needs an email) and Telnyx (accepts the agent's own email) both passed, $0.15 each.
