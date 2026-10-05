@@ -1,0 +1,13 @@
+{
+  "name": "agent-ready",
+  "description": "agent-ready skills for Claude Code",
+  "owner": { "name": "Tanso", "url": "https://tansohq.com" },
+  "plugins": [
+    {
+      "name": "agent-ready",
+      "description": "Audit whether agents can sign up for and use your product, and verify it with a real agent run.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+---
+name: agent-ready-verify
+description: "Have a real agent sign up for the developer's product and check the key it got, using agent-ready verify. Creates a real account on the product and spends model money through the developer's Claude Code. Run only when the developer explicitly asks for a verify run."
+disable-model-invocation: true
+---
+
+# agent-ready verify
+
+`npx @tansohq/agent-ready verify` starts a separate Claude Code agent that tries the task in `agent-ready.yml` on the product, then checks the key the agent got by making one call three times: with the key (must succeed), with no key and with a wrong key (both must be refused with 400, 401 or 403).
+
+A run creates a real account on the product and uses the developer's Claude Code. Model use is capped at $5 by default (`--max-budget-usd`). Runs in October 2026 cost $0.06 to $0.47; cost depends on the model the developer's Claude Code uses and on how many turns the agent takes. Never start a real run without the developer's explicit yes in this conversation.
+
+## 1. The config
+
+Verify reads `agent-ready.yml` in the current directory. If it is missing, run `npx @tansohq/agent-ready audit <url> --json --yes` first, which writes it.
+
+Add the call that proves a key works. Pick an authenticated read from the product's own API docs that refuses a request without a key:
+
+```yaml
+verify_call: GET https://api.example.com/v1/me
+verify_header: Authorization: Bearer {key}   # default
+verify_expect: 200                           # default
+verify_assert: id                            # optional: a field that must be present, or field=value
+```
+
+Optional lines, only when the product needs them:
+
+- `verify_fields: PROJECT_ID`: values the agent saves next to its key, filled into `{PROJECT_ID}` in the call.
+- `verify_body`: a request body; use `POST` in `verify_call`. A body starting with `{` is sent as JSON, anything else as a form.
+- `verify_exchange: POST <url>`, `verify_exchange_body` (use `{key}`) and `verify_exchange_token` (where the token is in the reply): trade the key for a token before the call.
+- `verify_hosts: a.example.com, b.example.com`: more hosts the agent may reach. By default it may reach only the product's own domain, its usual subdomains and the hosts in `verify_call` and `verify_exchange`.
+
+Do not tell the agent where to save its key in `task`. The run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`.
+
+## 2. Check the plan (free)
+
+```bash
+npx @tansohq/agent-ready verify --check --json
+```
+
+This starts no agent and sends no request to the product. It prints `agent-ready/verify-plan@1`: whether Claude Code is installed and signed in (`claudeCode`), the hosts the agent may reach, the inbox, the turn and spending limits, what the agent saves and the calls the checker makes. It exits `0` when ready and `2` when not; a not-ready plan carries the fix in `claudeCode.hint`.
+
+## 3. Ask, then run
+
+Show the developer the plan and ask for a yes, naming: the real account it creates on the product, that it uses their Claude Code, and the spending cap. Only after a yes:
+
+```bash
+npx @tansohq/agent-ready verify --yes --json
+```
+
+- Runs in October 2026 took 27 seconds to 4 minutes. A run is stopped after 30 minutes, or after 5 minutes with no output. Run it in the background or with a long timeout.
+- `--max-budget-usd <usd>` changes the cap (default 5). Claude Code checks it after each turn, so a run can end slightly above it. `--max-turns <n>` changes the turn budget (default 40).
+- If the product emails a code or link, the developer can set `AGENTMAIL_API_KEY` so each run gets its own inbox, deleted afterwards. Without it, the agent stops and says so where the product requires email.
+
+## 4. Report it
+
+The JSON is `agent-ready/verify@1`. Report `outcome`, `reason`, each entry in `checks`, `turns`, `costUsd` and `folder`.
+
+| Exit | `outcome` | Means |
+| --- | --- | --- |
+| `0` | `passed` or `handoff` | The key works and no key and a wrong key were refused; or the agent correctly stopped where the onboarding model says a person sets access up first. |
+| `1` | `failed` | The agent got no key, or the checker's calls did not pass. `prompt` names a fix prompt in the run folder. |
+| `2` | | Usage or setup: missing `verify_call`, or Claude Code missing or signed out. |
+| `3` | `inconclusive` | Not a result about the product: server errors, a call that answers without a key, the agent could not connect, the spending cap, or a run that did not finish. Say why and suggest what to change. |
+| `130` | | Cancelled. |
+
+The run folder holds the agent's trace and notes. Keys, claim codes, connection-string passwords and one-time codes and links are scrubbed from every file. The agent may use only its test identity's email address; a hook refuses commands, requests and files that carry any other.

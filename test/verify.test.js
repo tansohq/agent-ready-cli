@@ -167,6 +167,14 @@ describe("verify: the checker", () => {
     assert.match(verdict.reason, /could not connect/);
   });
 
+  it("an agent stopped at the spending cap is inconclusive and says how to raise it", () => {
+    const result = { evaluation: { success: false, stoppedAt: "not_acquired" }, execution: { stoppedBecause: "error_max_budget_usd", executor: { maxBudgetUsd: 2 } } };
+    const verdict = classify(result, "try_then_claim");
+    assert.equal(verdict.outcome, "inconclusive");
+    assert.equal(verdict.exitCode, 3);
+    assert.match(verdict.reason, /spending cap \(\$2\).*--max-budget-usd/);
+  });
+
   it("a 400 for a missing key counts as refused, as Cloudflare answers it", async () => {
     const fake = async (url, init) => ({ status: init.headers.Authorization === `Bearer ${GOOD}` ? 200 : init.headers.Authorization ? 401 : 400, text: async () => "{}" });
     const r = await checkKey(parseVerifySpec({ verify_call: "GET https://api.cloudflare.com/client/v4/user" }), GOOD, { fetchImpl: fake });
@@ -236,6 +244,9 @@ describe("verify: what the agent inherits and what stays on disk", () => {
     const args = argsFor({ prompt: "p", maxTurns: 5, settingsPath: "/tmp/s.json", tools: ["Bash"] });
     assert.ok(args.includes("--strict-mcp-config"));
     assert.equal(args[args.indexOf("--setting-sources") + 1], "project,local");
+    assert.ok(!args.includes("--max-budget-usd"));
+    const capped = argsFor({ prompt: "p", maxTurns: 5, settingsPath: "/tmp/s.json", tools: ["Bash"], maxBudgetUsd: 2 });
+    assert.equal(capped[capped.indexOf("--max-budget-usd") + 1], "2");
   });
 
   it("opens localhost to the agent only when the product itself is local", () => {
@@ -420,6 +431,7 @@ describe("verify: command", () => {
     assert.deepEqual(plan.agent.saves, ["AGENT_READY_KEY", "PROJECT_ID"]);
     assert.ok(plan.agent.hosts.includes("claimable.neon.tech"));
     assert.match(plan.checker.call, /oauth2\/token for a token/);
+    assert.equal(plan.agent.maxBudgetUsd, 5);
     assert.equal(existsSync(join(cwd, ".agent-ready")), false);
   });
 

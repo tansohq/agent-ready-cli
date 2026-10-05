@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9 (2026-10-05)
+
+- Two skills replace the old one, which taught agents the hidden `scan` and `crash` commands instead of `audit` and `verify`. `agent-ready` runs the audit; `agent-ready-verify` runs a real agent and, in Claude Code, starts only when you type `/agent-ready-verify`. In fresh Claude Code sessions, "audit neon.com with agent-ready" ran the audit (5 turns, $0.03), "run agent-ready verify on neon.com" showed the plan and pointed to `/agent-ready-verify` without starting a run, and `/agent-ready-verify neon.com` stopped at the plan to ask for a yes.
+- The package is a Claude Code plugin (`claude plugin marketplace add tansohq/agent-ready-cli`), and `npx skills add tansohq/agent-ready-cli` installs the skills for Codex, Cursor and other agents that read `.agents/skills`.
+- `verify --max-budget-usd` caps the agent's model use, default $5. Claude Code checks it after each turn, so a run can end slightly above it, and a run stopped there is inconclusive. The confirmation said a run costs "about $1 to $4", taken from September runs; October runs cost $0.06 to $0.47, and it now says so.
+- README: quickstarts for the terminal, a coding agent and CI, and new sections on cost, accounts and data, and on limits, with the numbers from the code.
+- AGENTS.md ships in the package and the public repository, for agents that use or change the tool.
+
 ## 0.1.8 (2026-10-05)
 
 - A Neon run printed and saved the project's database password: the check `verify_assert: database_url` showed the field's value, and the agent's trace kept the connection string. An assertion with no `=value` now reports only that the field is present, and the scrubber removes the password from any connection string (`postgres://user:password@…`) and Neon's `npg_` tokens, whatever the field is called.

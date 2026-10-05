@@ -20,7 +20,7 @@ export const MODES = ["signup", "given", "none"];
 // account; needs the operator's explicit go). mode given: the key is injected. mode none: no credential, stop early.
 // taskModule: a task built at run time (agent-ready verify builds one from agent-ready.yml) instead of a built-in id.
 // noInbox: signup without any mailbox, for products whose agent signup needs no email.
-export async function runHarness({ taskId, taskModule = null, runId, outDir, version, mode = null, inboxAddress = null, noInbox = false, executorName, maxTurns, model, log = () => {} }) {
+export async function runHarness({ taskId, taskModule = null, runId, outDir, version, mode = null, inboxAddress = null, noInbox = false, executorName, maxTurns, maxBudgetUsd = null, model, log = () => {} }) {
   const mod = taskModule || TASKS[taskId];
   if (!mod) throw new Error(`unknown task ${taskId}; known: ${Object.keys(TASKS).join(", ")}`);
   const credentials = resolveCredentials(mod.task);
@@ -64,7 +64,7 @@ export async function runHarness({ taskId, taskModule = null, runId, outDir, ver
   mkdirSync(workDir, { recursive: true });
   const poller = inbox ? startPolling({ workDir, inbox, key: mailKey, log: (e) => log({ step: "agent", ...e }) }) : null;
   const execution = await execute({
-    task: mod.task, runId, doc, workDir, credentials, mode, persona, executorName, maxTurns, model,
+    task: mod.task, runId, doc, workDir, credentials, mode, persona, executorName, maxTurns, maxBudgetUsd, model,
     afterRun: async () => ({ mail: inbox ? { provider: inbox.provider, email: inbox.email, delivered: poller.stop() } : null }),
     log: (e) => log({ step: "agent", ...e }),
   });

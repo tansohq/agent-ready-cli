@@ -1,6 +1,6 @@
 {
   "name": "@tansohq/agent-ready",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Check whether an AI agent can sign up for and use your product, get fix prompts for your coding agent, and verify with a real agent.",
   "type": "module",
   "bin": {
@@ -26,7 +26,9 @@
     "skills/",
     "README.md",
     "CHANGELOG.md",
-    "LICENSE"
+    "LICENSE",
+    ".claude-plugin/",
+    "AGENTS.md"
   ],
   "keywords": [
     "agent-readiness",

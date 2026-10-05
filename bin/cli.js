@@ -164,6 +164,12 @@ Examples:
     if (opts.failOn && audit.findings.some((f) => FAIL_ON[opts.failOn].includes(f.severity))) process.exitCode = 1;
   });
 
+function parseBudget(value) {
+  const usd = Number(value);
+  if (!Number.isFinite(usd) || usd <= 0) throw new InvalidArgumentError("It must be a dollar amount above 0, such as 2 or 0.5.");
+  return usd;
+}
+
 // Claude Code runs the agent. Missing or signed out, the run cannot start: a setup step, not a result.
 function claudeStatus() {
   const version = spawnSync("claude", ["--version"], { encoding: "utf8" });
@@ -184,10 +190,11 @@ program
   .option("-y, --yes", "skip the confirmation")
   .option("--inbox <address>", "an inbox you will relay mail from into the run's work/inbox/, for products that email a code")
   .option("--max-turns <n>", "agent turn budget", (v) => parseInt(v, 10), 40)
+  .option("--max-budget-usd <usd>", "stop the agent once model use passes this many dollars (checked after each turn)", parseBudget, 5)
   .option("--model <name>", "model for the agent")
   .option("--executor <name>", "agent runner", "claude-print")
   .option("--out <dir>", "run directory (default: .agent-ready/<host>/<runId>)")
-  .option("--check", "check the setup and print the run plan without starting the agent (free, makes no requests)")
+  .option("--check", "check the setup and print the run plan without starting the agent (free, sends nothing to the product)")
   .option("--json", "print the result to stdout")
   .option("--no-color", "plain output")
   .addHelpText("after", `
@@ -215,7 +222,7 @@ Examples:
         target: { url, host },
         task,
         claudeCode: claude,
-        agent: { hosts: networkFor(url, spec), inbox, maxTurns: opts.maxTurns, saves: ["AGENT_READY_KEY", ...spec.fields] },
+        agent: { hosts: networkFor(url, spec), inbox, maxTurns: opts.maxTurns, maxBudgetUsd: opts.maxBudgetUsd, saves: ["AGENT_READY_KEY", ...spec.fields] },
         checker: { call: describeSpec(spec), calls: ["with the agent's key: must answer " + spec.expect, "with no key: must be refused (400, 401 or 403)", "with a wrong key: must be refused"] },
       };
       if (opts.json) process.stdout.write(JSON.stringify(plan, null, 2) + "\n");
@@ -225,7 +232,7 @@ Examples:
     if (!opts.yes) {
       if (!process.stdin.isTTY) fail(opts, 2, "confirmation_required", "verify runs a real agent that creates an account on the product.", "Pass --yes to run it without a terminal.");
       const rl = createInterface({ input: process.stdin, output: process.stderr });
-      const reply = await rl.question(`\n  A real agent will try to sign up on ${host} using your Claude Code.\n  It creates an account named with the run id, and model use costs about $1 to $4.\n  Continue? [y/N] `).catch((err) => {
+      const reply = await rl.question(`\n  A real agent will try to sign up on ${host} using your Claude Code.\n  It creates an account named with the run id. Model use is capped at $${opts.maxBudgetUsd} (--max-budget-usd);\n  October runs cost $0.06 to $0.47, and cost depends on your Claude Code model.\n  Continue? [y/N] `).catch((err) => {
         if (err.code === "ABORT_ERR") return "";
         throw err;
       });
@@ -252,7 +259,7 @@ Examples:
       if (live) process.stderr.write(`\r\x1b[2K  ${style.dim(`Agent working · ${steps} actions`)}`);
     };
     if (!opts.json) console.error(`\n  ${style.dim(`Starting the agent on ${host}${noInbox ? " (no inbox)" : ""}…`)}`);
-    const result = await runHarness({ taskModule: buildVerifyTask({ url, task, spec }), runId: id, outDir: out, version: pkg.version, mode: "signup", inboxAddress: opts.inbox || null, noInbox, executorName: opts.executor, maxTurns: opts.maxTurns, model: opts.model, log });
+    const result = await runHarness({ taskModule: buildVerifyTask({ url, task, spec }), runId: id, outDir: out, version: pkg.version, mode: "signup", inboxAddress: opts.inbox || null, noInbox, executorName: opts.executor, maxTurns: opts.maxTurns, maxBudgetUsd: opts.maxBudgetUsd, model: opts.model, log });
     if (live) process.stderr.write("\r\x1b[2K");
     const resultMd = existsSync(join(out, "work", "RESULT.md")) ? readFileSync(join(out, "work", "RESULT.md"), "utf8") : "";
     const verdict = classify(result, config.onboarding, resultMd);
@@ -417,7 +424,7 @@ program
 
 program
   .command("crash <url>", { hidden: true })
-  .description("Smoke walk with a real browser: pricing and signup pages, screenshots, CAPTCHA and email-loop detection. Never submits. (The full agent run is an LLM skill step; see skills/agent-ready/crash/PERSONA.md.)")
+  .description("Smoke walk with a real browser: pricing and signup pages, screenshots, CAPTCHA and email-loop detection. Never submits.")
   .requiredOption("--smoke", "run the scripted smoke walk (the only mode the CLI runs itself)")
   .option("--into <dir>", "existing run directory (from scan) to add crash.json to; default: newest run for this host, else a new one")
   .option("--task <text>", "the customer's task")

@@ -184,6 +184,7 @@ export function classify(result, onboarding, resultMd = "") {
   // a crash or a stopped process does not: the second real run was stopped after the agent already had a key.
   if (evaluation.stoppedAt !== "credential_rejected" && REPORTED_5XX.test(resultMd || "")) return { outcome: "inconclusive", exitCode: 3, reason: "The agent reports server errors from the product (see RESULT.md). Try again later." };
   const stopped = result.execution?.stoppedBecause || "";
+  if (stopped === "error_max_budget_usd") return { outcome: "inconclusive", exitCode: 3, reason: `The agent stopped at the spending cap ($${result.execution?.executor?.maxBudgetUsd ?? "?"}) before it finished. Raise --max-budget-usd to let it continue. This is not a result about the product.` };
   if (!["success", "error_max_turns"].includes(stopped)) return { outcome: "inconclusive", exitCode: 3, reason: `The agent run did not finish (${stopped || "no result"}). This is not a result about the product.` };
   const unreachable = result.execution?.signals?.connectionFailures || 0;
   if (!evaluation.success && evaluation.stoppedAt !== "credential_rejected" && unreachable >= 2) return { outcome: "inconclusive", exitCode: 3, reason: `The agent could not connect to the product (${unreachable} connection failures). This is about the test environment, not the product.` };

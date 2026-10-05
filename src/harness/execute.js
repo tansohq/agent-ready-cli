@@ -94,7 +94,7 @@ function scrubWorkDir(workDir, redact, scrubbed = [], base = workDir) {
   return scrubbed;
 }
 
-export async function execute({ task, runId, doc, workDir, credentials, mode, persona = null, executorName = claudePrint.name, maxTurns = 40, model = null, afterRun = async () => ({}), log = () => {} }) {
+export async function execute({ task, runId, doc, workDir, credentials, mode, persona = null, executorName = claudePrint.name, maxTurns = 40, maxBudgetUsd = null, model = null, afterRun = async () => ({}), log = () => {} }) {
   const executor = EXECUTORS[executorName];
   if (!executor) throw new Error(`unknown executor ${executorName}; known: ${Object.keys(EXECUTORS).join(", ")}`);
   mkdirSync(workDir, { recursive: true });
@@ -109,7 +109,7 @@ export async function execute({ task, runId, doc, workDir, credentials, mode, pe
     events.push(entry);
     log(entry);
   };
-  const run = await executor.run({ prompt, workDir, childEnv: credentials.childEnv, tools: EXECUTOR_TOOLS, network: task.network, maxTurns, model, redact: credentials.redact, learn: credentials.learn, onEvent, allowedEmails: persona?.email ? [persona.email] : [] });
+  const run = await executor.run({ prompt, workDir, childEnv: credentials.childEnv, tools: EXECUTOR_TOOLS, network: task.network, maxTurns, maxBudgetUsd, model, redact: credentials.redact, learn: credentials.learn, onEvent, allowedEmails: persona?.email ? [persona.email] : [] });
   const extra = await afterRun();
 
   // If the agent acquired a key, learn its value now so everything written from here on is scrubbed of it.

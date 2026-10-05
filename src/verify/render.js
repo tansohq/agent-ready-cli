@@ -49,6 +49,7 @@ export function renderPlan(plan, style) {
   row(plan.claudeCode.ok, "Claude Code", plan.claudeCode.detail);
   row(null, "Agent may reach", plan.agent.hosts.join(", "));
   row(null, "Inbox", plan.agent.inbox);
+  row(null, "Limits", `${plan.agent.maxTurns} turns, $${plan.agent.maxBudgetUsd} of model use (checked after each turn, so a run can end slightly above it)`);
   row(null, "Agent saves", `${plan.agent.saves.join(" and ")} in work/CREDENTIAL.env (the harness asks for them; the task need not)`);
   row(null, "Checker calls", plan.checker.call);
   for (const c of plan.checker.calls) row(null, "", c);

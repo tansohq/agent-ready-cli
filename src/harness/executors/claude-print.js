@@ -74,17 +74,19 @@ export const DEFAULT_IDLE_MS = 5 * 60 * 1000;
 // MCP servers (Gmail, Slack, Drive among 37), user hooks, plugins and CLAUDE.md. --strict-mcp-config with no
 // --mcp-config loads no MCP server; --setting-sources project,local skips user settings, hooks, plugins and memory.
 // --bare would be stricter but refuses a Claude Code login and needs ANTHROPIC_API_KEY.
-export function argsFor({ prompt, maxTurns, settingsPath, tools, model = null }) {
+export function argsFor({ prompt, maxTurns, settingsPath, tools, model = null, maxBudgetUsd = null }) {
   const args = ["-p", prompt, "--output-format", "stream-json", "--verbose", "--max-turns", String(maxTurns), "--permission-mode", "default", "--strict-mcp-config", "--setting-sources", "project,local", "--settings", settingsPath, "--allowedTools", ...tools, "--disallowedTools", "WebSearch", "Agent", "Task"];
   if (model) args.push("--model", model);
+  // Claude Code checks the cap after each turn, so a run can end slightly above it.
+  if (maxBudgetUsd) args.push("--max-budget-usd", String(maxBudgetUsd));
   return args;
 }
 
-export async function run({ prompt, workDir, childEnv, tools, network, maxTurns, model, redact, learn = () => {}, onEvent, allowedEmails = [], timeoutMs = DEFAULT_TIMEOUT_MS, idleMs = DEFAULT_IDLE_MS }) {
+export async function run({ prompt, workDir, childEnv, tools, network, maxTurns, maxBudgetUsd = null, model, redact, learn = () => {}, onEvent, allowedEmails = [], timeoutMs = DEFAULT_TIMEOUT_MS, idleMs = DEFAULT_IDLE_MS }) {
   const settings = settingsFor({ network, tools, allowedEmails });
   const settingsPath = join(workDir, "executor-settings.json");
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-  const args = argsFor({ prompt, maxTurns, settingsPath, tools, model });
+  const args = argsFor({ prompt, maxTurns, settingsPath, tools, model, maxBudgetUsd });
   const startedAt = new Date().toISOString();
   const child = spawn("claude", args, { cwd: workDir, env: childEnv, stdio: ["ignore", "pipe", "pipe"] });
   const raw = createWriteStream(join(workDir, "trace.jsonl"));
@@ -149,7 +151,7 @@ export async function run({ prompt, workDir, childEnv, tools, network, maxTurns,
   const stoppedBecause = spawnError ? `spawn failed: ${spawnError.code || spawnError.message}` : timedOut ? "timeout" : stalled ? "stalled" : result?.subtype ?? (exitCode === 0 ? "exit" : `exit ${exitCode}`);
   const errText = [spawnError ? `could not start claude: ${spawnError.message}` : null, timedOut ? `killed after ${timeoutMs}ms wall-clock timeout` : null, stalled ? `killed after ${idleMs}ms with no output` : null, stderr.trim() || null].filter(Boolean).join("\n");
   return {
-    executor: { name, model: model || "default", maxTurns, tools, confinement: { cwd: "scratch directory", toolAllowlist: true, webFetchDomains: network, bashSandbox: settings.sandbox, settingsFile: "executor-settings.json" } },
+    executor: { name, model: model || "default", maxTurns, maxBudgetUsd, tools, confinement: { cwd: "scratch directory", toolAllowlist: true, webFetchDomains: network, bashSandbox: settings.sandbox, settingsFile: "executor-settings.json" } },
     startedAt,
     finishedAt: new Date().toISOString(),
     exitCode,

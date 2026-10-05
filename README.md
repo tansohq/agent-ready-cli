@@ -10,25 +10,68 @@ npx @tansohq/agent-ready verify                  # a real agent tries it; a sepa
 - **`audit`** reads your public pages the way an agent does, shows seven steps (Discover, Understand, Sign up, Access, Use, Pay, Manage), asks three questions about how agents should onboard, and writes one fix prompt per gap for your coding agent. It submits nothing.
 - **`verify`** has a real agent (your local Claude Code) try the task on your product, then checks the key it got with a call you declare: with the key, with no key, and with a wrong key.
 
-The loop: audit, paste a prompt into Claude Code or Cursor, audit again, then verify.
+The loop: audit, hand a fix prompt to your coding agent, deploy, audit again, then verify.
 
-Install once with `npm i -g @tansohq/agent-ready` to run `agent-ready audit …` and `agent-ready verify`. Needs Node 20.9 or later; `verify` also needs [Claude Code](https://claude.com/claude-code) signed in.
+## Quickstart
 
-## For agents
+Needs Node 20.9 or later. `verify` also needs [Claude Code](https://claude.com/claude-code), installed and signed in.
 
-If you are an agent running this for a developer, nothing needs a terminal:
+### In your terminal
 
 ```bash
-npx @tansohq/agent-ready audit example.com --json --yes
-npx @tansohq/agent-ready audit example.com --json --onboarding existing_account --abuse-cost high --human-before always
-npx @tansohq/agent-ready verify --check --json      # free: checks setup and prints the plan, runs nothing
-npx @tansohq/agent-ready verify --json --yes        # creates a real account on the product; ask the developer first
+npx @tansohq/agent-ready audit yourproduct.com       # answer three questions, or add --yes for the defaults
+npx @tansohq/agent-ready verify --check              # free: checks your setup and shows what a run would do
+npx @tansohq/agent-ready verify                      # asks before it starts
 ```
 
-- `--json` prints one JSON document to stdout: `agent-ready/audit-report@1` for audit (with `files.prompts`, `files.brief` and `files.config`, relative to where it ran), `agent-ready/verify@1` for verify, `agent-ready/verify-plan@1` for `verify --check`, and `agent-ready/error@1` for any error, as `{ error: { code, message, hint } }`.
-- The three questions have flags: `--onboarding`, `--abuse-cost`, `--human-before`. Any of them, or `--yes`, means no prompt; unanswered ones take their defaults. `--human-before never` lets an agent act alone, `outbound` requires a verified person before an agent sends, publishes, charges or invites, and `always` requires a verified person to own the account before any use. The fix prompts carry that rule.
-- Exit codes: `0` done, `1` fixes at or above `--fail-on` (audit) or the check failed (verify), `2` usage or setup, `3` the site did not answer or the run was inconclusive, `130` cancelled.
-- Each fix prompt is written for a coding agent: read `files.prompts[0]`, make the change in the developer's repository, run its acceptance tests, then run audit again.
+`audit` writes `agent-ready.yml`; add a `verify_call` to it before `verify` (see [Verify with a real agent](#verify-with-a-real-agent)). To skip `npx`, install once with `npm i -g @tansohq/agent-ready` and run `agent-ready audit …`.
+
+### With your coding agent
+
+Any agent that can run shell commands and read a web page can use it with no install. Paste this into Claude Code, Codex, Cursor or another coding agent:
+
+```text
+Read https://raw.githubusercontent.com/tansohq/agent-ready-cli/main/skills/agent-ready/SKILL.md and follow it to audit yourproduct.com.
+```
+
+To keep the instructions installed, add the two skills. `agent-ready` runs the audit; `agent-ready-verify` runs a real agent and is written to run only when you ask.
+
+```bash
+# Claude Code, as a plugin
+claude plugin marketplace add tansohq/agent-ready-cli
+claude plugin install agent-ready@agent-ready
+
+# Codex, Cursor and other agents that read skills, with the skills CLI (https://github.com/vercel-labs/skills)
+npx skills add tansohq/agent-ready-cli
+```
+
+Then ask in plain words, such as "audit yourproduct.com with agent-ready". Verify starts only when you invoke it yourself, because it creates an account and spends money: in Claude Code, type `/agent-ready-verify`. Agents that don't support user-only skills follow the skill's own rule: check the plan, then ask before a real run.
+
+### In CI
+
+```bash
+npx @tansohq/agent-ready audit $URL --fail-on high --json      # exit 1 when a high-severity gap is found
+```
+
+Commit `agent-ready.yml` so CI reuses your answers. `verify` can run in CI with `--yes --json` where Claude Code is installed and signed in (or `ANTHROPIC_API_KEY` is set), but every run creates a real account and spends model money, so run it there only on purpose.
+
+## Cost, accounts and data
+
+| | `audit` | `verify --check` | `verify` |
+| --- | --- | --- | --- |
+| Costs | nothing | nothing | your Claude Code's model use, capped at $5 by default (`--max-budget-usd`) |
+| Creates | `agent-ready.yml` (with your answers; with the defaults only if none exists) and a run folder | nothing | a real account on your product, named with the run id, and a run folder |
+| Sends requests to | your product's public pages | nothing to your product; it runs `claude --version` and `claude auth status` | your product, Anthropic (through your Claude Code), AgentMail if `AGENTMAIL_API_KEY` is set |
+
+- **Cost.** Verify runs in October 2026 cost $0.06 to $0.47 and took 27 seconds to 4 minutes; runs in September, with an earlier version of this tool, cost $1.10 to $3.00. Cost depends on the model your Claude Code uses and on how many turns the agent takes. Claude Code checks the cap after each turn, so a run can end slightly above it; a run stopped by the cap is reported as inconclusive, not as a failure.
+- **Accounts.** The account the agent creates stays on your product after the run; remove it the way you would any test account. With `AGENTMAIL_API_KEY` set, each run gets a fresh [AgentMail](https://agentmail.to) inbox, deleted when the run ends.
+- **Your data.** The CLI sends nothing to Tanso: no telemetry, no account. Audit requests carry the user agent `agent-ready/<version> (+https://tansohq.com)`. The agent runs with its own isolated settings: none of your MCP servers, hooks, plugins or CLAUDE.md files, and only the test identity's email address (a hook refuses any other).
+- **Secrets.** The agent's key, claim codes, connection-string passwords and one-time codes and links are scrubbed from every file in the run folder after the check. The run folder (`.agent-ready/`) stays on your machine; keep it out of version control.
+
+## Limits
+
+- **`audit`** sends GET requests only: at most 36 per run (well-known paths such as `/llms.txt`, plus at most 14 links it follows from your pages), all on your product's own registrable domain, so docs on another domain are not read. Each request times out after 10 seconds and reads at most 2 MB. It does not run JavaScript, so a page that renders only in the browser reads as empty, and it cannot see anything behind a login. Steps found in page text can be wrong; only a real agent run verifies a step.
+- **`verify`** gives the agent 40 turns (`--max-turns`) and $5 of model use (`--max-budget-usd`). A run is stopped after 30 minutes, or after 5 minutes with no output. The agent can reach only your product's own domain and its usual subdomains (`www`, `api`, `docs`, `app`, `auth`, `console`, `dashboard`, `developers`), the hosts in `verify_call` and `verify_exchange`, and anything in `verify_hosts`. It can use Bash, WebFetch and file tools, not a browser, so a signup that works only in a browser (a form that needs JavaScript, or a CAPTCHA) stops it. One run is one attempt; results can differ between runs.
 
 ## Audit your product
 
@@ -132,7 +175,7 @@ verify_assert: database_url
 
 - `verify_hosts` lists hosts the agent may reach beyond the product's own, such as a CLI's package registry (`registry.npmjs.org`).
 
-You don't tell the agent where to save its key: the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`, and the checker reads them from there. Before the real run, `verify --check` shows what it would do without starting the agent or making a request: whether Claude Code is installed and signed in, the hosts the agent may reach, the inbox, what the agent saves, and the calls the checker makes. It exits `0` when ready and `2` when not.
+You don't tell the agent where to save its key: the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`, and the checker reads them from there. Before the real run, `verify --check` shows what it would do without starting the agent or sending a request to your product: whether Claude Code is installed and signed in, the hosts the agent may reach, the inbox, what the agent saves, and the calls the checker makes. It exits `0` when ready and `2` when not.
 
 ```bash
 npx @tansohq/agent-ready verify --check
@@ -155,12 +198,28 @@ The checker makes that call three times: with the agent's key (must return `veri
 
 It works on a product running on your machine too (`url: localhost:3000` means `http://localhost:3000`; on macOS the agent's sandbox opens localhost only for a local target).
 
-It creates a real account on the product, named with the run id, and asks before starting (`--yes` skips the question). The agent can reach only the product's own hosts and the verify call's host. For products that email a code or a link, set `AGENTMAIL_API_KEY` (an [AgentMail](https://agentmail.to) key): each run gets a fresh inbox, the agent reads the mail from it, and the inbox is deleted afterwards. Cosmic and Telnyx both passed this way. With no inbox (`AGENTMAIL_API_KEY` unset and no `--inbox`), the agent stops and says so where a product requires email. The key, claim codes, passwords in connection strings (`postgres://user:password@…`), and one-time codes and links in the agent's mail are scrubbed from every file after the check, and an assertion like `verify_assert: database_url` reports that the field is present, never its value. The agent may use only its test identity's email address: Claude Code tells the model the signed-in account's email, so a hook refuses any command, request or written file that carries another real address, and with no inbox the agent has no address at all.
+It creates a real account on the product, named with the run id, and asks before starting (`--yes` skips the question). The agent can reach only the hosts listed under [Limits](#limits). For products that email a code or a link, set `AGENTMAIL_API_KEY` (an [AgentMail](https://agentmail.to) key): each run gets a fresh inbox, the agent reads the mail from it, and the inbox is deleted afterwards. Cosmic and Telnyx both passed this way. With no inbox (`AGENTMAIL_API_KEY` unset and no `--inbox`), the agent stops and says so where a product requires email. The key, claim codes, passwords in connection strings (`postgres://user:password@…`), and one-time codes and links in the agent's mail are scrubbed from every file after the check, and an assertion like `verify_assert: database_url` reports that the field is present, never its value. The agent may use only its test identity's email address: Claude Code tells the model the signed-in account's email, so a hook refuses any command, request or written file that carries another real address, and with no inbox the agent has no address at all.
 
 Exit codes: `0` passed (or a correct handoff when your onboarding model says a person sets access up first), `1` failed (a fix prompt is written to the run's `prompts/`), `2` usage error, missing `verify_call`, or Claude Code missing or signed out, `3` inconclusive (the product returned server errors, the run did not finish, or the verify call answers without a key), `130` cancelled.
+
+## For agents and scripts
+
+Everything works without a terminal:
+
+```bash
+npx @tansohq/agent-ready audit example.com --json --yes
+npx @tansohq/agent-ready audit example.com --json --onboarding existing_account --abuse-cost high --human-before always
+npx @tansohq/agent-ready verify --check --json      # free: checks setup and prints the plan, runs nothing
+npx @tansohq/agent-ready verify --json --yes        # creates a real account on the product; ask the developer first
+```
+
+- `--json` prints one JSON document to stdout: `agent-ready/audit-report@1` for audit (with `files.prompts`, `files.brief` and `files.config`, relative to where it ran), `agent-ready/verify@1` for verify, `agent-ready/verify-plan@1` for `verify --check`, and `agent-ready/error@1` for any error, as `{ error: { code, message, hint } }`. Nothing else goes to stdout.
+- The three questions have flags: `--onboarding`, `--abuse-cost`, `--human-before`. Any of them, or `--yes`, means no prompt; unanswered ones take their defaults. `--human-before never` lets an agent act alone, `outbound` requires a verified person before an agent sends, publishes, charges or invites, and `always` requires a verified person to own the account before any use. The fix prompts carry that rule.
+- Exit codes: `0` done, `1` fixes at or above `--fail-on` (audit) or the check failed (verify), `2` usage or setup, `3` the site did not answer or the run was inconclusive, `130` cancelled.
+- Each fix prompt is written for a coding agent: read `files.prompts[0]`, make the change in the developer's repository, run its acceptance tests, then run audit again.
 
 ## More
 
 `agent-ready execute --task <id>` reruns one of the built-in example tasks against its public product with a real agent; `agent-ready execute --help` lists them. For your own product, use `verify`.
 
-Source: https://github.com/tansohq/agent-ready-cli. Issues and questions go there. The hosted dashboard at app.tansohq.com is a separate service and not part of this package.
+Source: https://github.com/tansohq/agent-ready-cli. Issues and questions go there. The hosted dashboard at app.tansohq.com is a separate service, not part of this package, and does not run agents any more.
