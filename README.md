@@ -53,20 +53,33 @@ Then ask in plain words, such as "audit yourproduct.com with agent-ready". Verif
 npx @tansohq/agent-ready audit $URL --fail-on high --json      # exit 1 when a high-severity gap is found
 ```
 
-Commit `agent-ready.yml` so CI reuses your answers. `verify` can run in CI with `--yes --json` where Claude Code is installed and signed in (or `ANTHROPIC_API_KEY` is set), but every run creates a real account and spends model money, so run it there only on purpose.
+Commit `agent-ready.yml` so CI reuses your answers. `verify` can run in CI with `--yes --json` where Claude Code is installed and signed in (or `ANTHROPIC_API_KEY` is set) and `AGENT_READY_API_KEY` holds your workspace's key (see [Your Tanso workspace](#your-tanso-workspace)). Every run creates a real account and spends model money, so run it there only on purpose.
 
 ## Cost, accounts and data
 
 | | `audit` | `verify --check` | `verify` |
 | --- | --- | --- | --- |
-| Costs | nothing | nothing | your Claude Code's model use, capped at $5 by default (`--max-budget-usd`) |
-| Creates | `agent-ready.yml` (with your answers; with the defaults only if none exists) and a run folder | nothing | a real account on your product, named with the run id, and a run folder |
-| Sends requests to | your product's public pages | nothing to your product; it runs `claude --version` and `claude auth status` | your product, Anthropic (through your Claude Code), AgentMail if `AGENTMAIL_API_KEY` is set |
+| Costs | nothing | nothing | your Claude Code's model use, capped at $5 by default (`--max-budget-usd`); one run from your Tanso workspace |
+| Creates | `agent-ready.yml` (with your answers; with the defaults only if none exists) and a run folder | nothing | a real account on your product, named with the run id, and a run folder; the first time, with your yes, a free Tanso workspace |
+| Sends requests to | your product's public pages | nothing to your product; it runs `claude --version` and `claude auth status`, and reads your workspace's runs left from Tanso | your product, Anthropic (through your Claude Code), Tanso (the run count and outcome), AgentMail if `AGENTMAIL_API_KEY` is set |
 
 - **Cost.** Verify runs in October 2026 cost $0.06 to $0.47 and took 27 seconds to 4 minutes; runs in September, with an earlier version of this tool, cost $1.10 to $3.00. Cost depends on the model your Claude Code uses and on how many turns the agent takes. Claude Code checks the cap after each turn, so a run can end slightly above it; a run stopped by the cap is reported as inconclusive, not as a failure.
 - **Accounts.** The account the agent creates stays on your product after the run; remove it the way you would any test account. With `AGENTMAIL_API_KEY` set, each run gets a fresh [AgentMail](https://agentmail.to) inbox, deleted when the run ends.
-- **Your data.** The CLI sends nothing to Tanso: no telemetry, no account. Audit requests carry the user agent `agent-ready/<version> (+https://tansohq.com)`. The agent runs with its own isolated settings: none of your MCP servers, hooks, plugins or CLAUDE.md files, and only the test identity's email address (a hook refuses any other).
+- **Your data.** `audit` sends nothing to Tanso. `verify` tells Tanso three things: a signup the first time (a label, `agent-ready CLI <version>`), that a run is starting, and how it ended (`passed`, `handoff`, `failed`, `inconclusive` or `not_started`). Tanso sees your IP address with those requests. It never receives your product's URL, the task, the agent's work or anything in the run folder. There is no other telemetry. Audit requests carry the user agent `agent-ready/<version> (+https://tansohq.com)`. The agent runs with its own isolated settings: none of your MCP servers, hooks, plugins or CLAUDE.md files, and only the test identity's email address (a hook refuses any other).
 - **Secrets.** The agent's key, claim codes, connection-string passwords and one-time codes and links are scrubbed from every file in the run folder after the check. The run folder (`.agent-ready/`) stays on your machine; keep it out of version control.
+
+## Your Tanso workspace
+
+`verify` counts each run on a free Tanso workspace, the same allowance the hosted dashboard uses: 6 starting runs, then 10 a day once a person claims the workspace. Paid runs are planned; there is no price yet. The first `verify` asks before creating the workspace (with `--yes`, pass `--create-account` too), and saves its key in `~/.config/agent-ready/credentials.json` (or under `$XDG_CONFIG_HOME`), readable only by you. `AGENT_READY_API_KEY` overrides the file.
+
+```bash
+npx @tansohq/agent-ready account            # runs left, and whether it is claimed
+npx @tansohq/agent-ready account --claim    # also prints the claim code: treat it like a password
+npx @tansohq/agent-ready login < key.txt    # use an existing workspace's key on this machine
+npx @tansohq/agent-ready logout             # forget the key here; the workspace stays
+```
+
+To claim, a person signs in at https://app.tansohq.com, opens Account and enters the claim code. The same key keeps working, now with 10 runs a day, and the workspace's CLI runs appear under Claimed workspaces. When the starting runs are used, `verify` refuses before the agent starts (exit `77`, `next_action: "claim"`); when today's are used, exit `75` with when the next one frees up. If Tanso cannot be reached, no run starts and none is used (exit `75`). The CLI is open source, so the count is kept on Tanso's server and honored by this code; it is how runs are measured and how a paid tier will work, not a lock on your machine.
 
 ## Limits
 
@@ -224,16 +237,17 @@ Everything works without a terminal:
 npx @tansohq/agent-ready audit example.com --json --yes
 npx @tansohq/agent-ready audit example.com --json --onboarding existing_account --abuse-cost high --human-before always
 npx @tansohq/agent-ready verify --check --json      # free: checks setup and prints the plan, runs nothing
-npx @tansohq/agent-ready verify --json --yes        # creates a real account on the product; ask the developer first
+npx @tansohq/agent-ready verify --json --yes --create-account   # creates a real account on the product and, the first time, a Tanso workspace; ask the developer first
 ```
 
 - `--json` prints one JSON document to stdout: `agent-ready/audit-report@1` for audit (with `files.prompts`, `files.brief` and `files.config`, relative to where it ran), `agent-ready/verify@1` for verify, `agent-ready/verify-plan@1` for `verify --check`, and `agent-ready/error@1` for any error, as `{ error: { code, message, hint } }`. Nothing else goes to stdout.
 - The three questions have flags: `--onboarding`, `--abuse-cost`, `--human-before`. Any of them, or `--yes`, means no prompt; unanswered ones take their defaults. `--human-before never` lets an agent act alone, `outbound` requires a verified person before an agent sends, publishes, charges or invites, and `always` requires a verified person to own the account before any use. The fix prompts carry that rule.
-- Exit codes: `0` done, `1` fixes at or above `--fail-on` (audit) or the check failed (verify), `2` usage or setup, `3` the site did not answer or the run was inconclusive, `130` cancelled.
+- Exit codes: `0` done, `1` fixes at or above `--fail-on` (audit) or the check failed (verify), `2` usage or setup, `3` the site did not answer or the run was inconclusive, `4` no Tanso workspace or its key was refused (`next_action: "create_account"` or `"replace_key"`), `75` try again later (Tanso unreachable, or today's runs used), `77` the starting runs are used and a person must claim the workspace, `130` cancelled. Errors carry `next_action` when there is one thing to do next.
+- `agent-ready account --json` prints `agent-ready/account@1`: `exists`, `claimed`, `runs` (`remaining`, `limit`, `window`), and `next_action`. It never creates a workspace.
 - Each fix prompt is written for a coding agent: read `files.prompts[0]`, make the change in the developer's repository, run its acceptance tests, then run audit again.
 
 ## More
 
 `agent-ready execute --task <id>` reruns one of the built-in example tasks against its public product with a real agent; `agent-ready execute --help` lists them. For your own product, use `verify`.
 
-Source: https://github.com/tansohq/agent-ready-cli. Issues and questions go there. The hosted dashboard at app.tansohq.com is a separate service, not part of this package, and does not run agents any more.
+Source: https://github.com/tansohq/agent-ready-cli. Issues and questions go there. The hosted dashboard at app.tansohq.com is where a person claims a workspace and sees its CLI runs; its own hosted agent runs are paused.

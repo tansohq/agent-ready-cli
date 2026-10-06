@@ -1,6 +1,6 @@
 {
   "name": "agent-ready",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Check whether an AI agent can sign up for and use your product: audit its public pages for free, or have a real agent sign up and check the key it got.",
   "author": {
     "name": "Tanso",

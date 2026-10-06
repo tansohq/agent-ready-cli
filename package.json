@@ -1,6 +1,6 @@
 {
   "name": "@tansohq/agent-ready",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Check whether an AI agent can sign up for and use your product, get fix prompts for your coding agent, and verify with a real agent.",
   "type": "module",
   "bin": {
@@ -13,6 +13,7 @@
   "files": [
     "bin/cli.js",
     "src/index.js",
+    "src/account/",
     "src/audit/",
     "src/crash/",
     "src/harness/",

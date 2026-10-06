@@ -39,14 +39,15 @@ Do not tell the agent where to save its key in `task`; the run asks it to write 
 npx @tansohq/agent-ready verify --check --json
 ```
 
-This starts no agent and sends no request to the product. It prints `agent-ready/verify-plan@1`: whether Claude Code is installed and signed in (`claudeCode`), the hosts the agent may reach, the inbox, the turn and spending limits, what the agent saves and the calls the checker makes. It exits `0` when ready and `2` when not; a not-ready plan carries the fix in `claudeCode.hint`.
+This starts no agent and sends no request to the product. It prints `agent-ready/verify-plan@1`: whether Claude Code is installed and signed in (`claudeCode`), the hosts the agent may reach, the inbox, the turn and spending limits, what the agent saves, the calls the checker makes, and the Tanso workspace (`workspace`: whether one exists and its runs left). It exits `0` when ready and `2` when not: Claude Code missing or signed out (the fix is in `claudeCode.hint`), or no runs left.
 
 ## 3. Ask, then run
 
-Show the developer the plan and ask for a yes, naming: the real account it creates on the product, that it uses their Claude Code, and the spending cap. Only after a yes:
+Show the developer the plan and ask for a yes, naming: the real account it creates on the product, that it uses their Claude Code, and the spending cap. Each run also uses one run from their free Tanso workspace; the plan's `workspace` says how many are left. If `workspace.exists` is false, the first run creates one (6 starting runs; Tanso receives the run count and outcome, never the product or the agent's work), so ask about that too. Only after a yes:
 
 ```bash
-npx @tansohq/agent-ready verify --yes --json
+npx @tansohq/agent-ready verify --yes --json                     # a workspace exists
+npx @tansohq/agent-ready verify --yes --json --create-account    # the first run, with the developer's yes for the workspace
 ```
 
 - Runs in October 2026 took 27 seconds to 4 minutes. A run is stopped after 30 minutes, or after 5 minutes with no output. Run it in the background or with a long timeout.
@@ -63,6 +64,9 @@ The JSON is `agent-ready/verify@1`. Report `outcome`, `reason`, each entry in `c
 | `1` | `failed` | The agent got no key, or the checker's calls did not pass. `prompt` names a fix prompt in the run folder. |
 | `2` | | Usage or setup: missing `verify_call`, or Claude Code missing or signed out. |
 | `3` | `inconclusive` | Not a result about the product: server errors, a call that answers without a key, the agent could not connect, the spending cap, or a run that did not finish. Say why and suggest what to change. |
+| `4` | | No Tanso workspace (`next_action: "create_account"`: ask, then add `--create-account`) or its key was refused (`"replace_key"`). Nothing ran. |
+| `75` | | Try later: Tanso could not be reached, or today's runs are used (`resets_at`). Nothing ran and no run was used. |
+| `77` | | The 6 starting runs are used. A person must claim the workspace: give the developer the output of `npx @tansohq/agent-ready account --claim` and say they enter the code on the Account page at app.tansohq.com. Do not claim it yourself. |
 | `130` | | Cancelled. |
 
 The run folder holds the agent's trace and notes. Keys, claim codes, connection-string passwords and one-time codes and links are scrubbed from every file. The agent may use only its test identity's email address; a hook refuses commands, requests and files that carry any other.

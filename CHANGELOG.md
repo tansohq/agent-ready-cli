@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0 (2026-10-06)
+
+- `verify` counts each run on a free Tanso workspace, the allowance the hosted dashboard uses: 6 starting runs, then 10 a day once a person claims the workspace. Paid runs are planned and have no price yet. The first `verify` asks before creating the workspace, and with `--yes` it needs `--create-account` as well. The key is saved in `~/.config/agent-ready/credentials.json` (0600, per API host), and `AGENT_READY_API_KEY` overrides it.
+- What Tanso receives: a signup label, the start of a run, and its outcome, with your IP address. Never the product, the task or the agent's work. `audit` still sends nothing.
+- New exit codes, each with `next_action` in the JSON error: `4` means no workspace or a refused key, `75` means try later (Tanso unreachable, or today's runs used), and `77` means the starting runs are used and a person must claim. A run Tanso cannot count does not start.
+- New commands: `account` (runs left and claim status; `--claim` prints the claim code), `login` (a key from standard input) and `logout`. `verify --check` and every finished run show the runs left.
+- app.tansohq.com: the Account page takes a claim code and lists claimed workspaces with their runs left and recent CLI runs. New API routes: `POST /v1/local-runs`, `POST /v1/local-runs/:id/finish` and `GET /v1/claimed-workspaces`. Fixed the docs' broken route names, and `auth.md`'s claim and revocation text. The API reference now names agent keys.
+
 ## 0.2.0 (2026-10-05)
 
 - `audit` recognizes a token a person creates that the product's CLI then takes from a flag or an environment variable ("Set the VERCEL_TOKEN environment variable", "use --with-token to pass in a personal access token"), and a CLI that signs in only through a browser. GitHub and Vercel had scored "needs a person" for Sign up and Access because their docs never say "API key in the dashboard"; both now read as a handoff, 5 of 7. Across the 25 products in the October sweep, no other verdict changed.
