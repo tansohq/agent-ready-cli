@@ -146,3 +146,11 @@ test("the audit's Sign up and Access steps say the agent's CLI takes the token",
   assert.match(steps.signup.reason, /CLI takes the token from a flag or an environment variable/);
   assert.equal(steps.access.state, "handoff");
 });
+
+test("an agent-is-the-customer signup reads as a sentence, with no person step", async () => {
+  const quote = "Agents sign up with POST /api/v1/agents/register and hold the account themselves. No human required.";
+  const { funnel } = await inspect({ url: "https://acme.dev/", version: "test", runId: "r", fetchSource: llmsOnly(quote) });
+  const signup = funnel.steps.find((s) => s.id === "signup");
+  assert.match(signup.reason, /No person step is documented: the agent holds the account itself\.$/);
+  assert.doesNotMatch(signup.reason, /steps in none/i);
+});

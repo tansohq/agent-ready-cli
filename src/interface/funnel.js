@@ -88,7 +88,10 @@ function signup(doc) {
   const existing = patterns.find((p) => p.id === "existing_account");
   const refs = (p) => (p?.evidence || []).map((e) => e.obs);
   if (self && self.needs.length) return step("signup", "agent_can", `The docs describe an agent signing up on its own (${self.name}). It needs: ${self.needs.join(", ")}.`, refs(self));
-  if (self) return step("signup", "agent_can", `The docs describe an agent signing up on its own (${self.name}).${self.humanBoundary ? ` A person steps in ${self.humanBoundary.charAt(0).toLowerCase()}${self.humanBoundary.slice(1)}` : ""}`, refs(self));
+  // "Agent is the customer" has no person step, and its boundary text says so ("None documented. ..."), which does
+  // not read after "A person steps in".
+  const boundary = !self?.humanBoundary ? "" : /^None\b/.test(self.humanBoundary) ? " No person step is documented: the agent holds the account itself." : ` A person steps in ${self.humanBoundary.charAt(0).toLowerCase()}${self.humanBoundary.slice(1)}`;
+  if (self) return step("signup", "agent_can", `The docs describe an agent signing up on its own (${self.name}).${boundary}`, refs(self));
   if (existing?.cli === "token") return step("signup", "handoff", "A person creates the account and a token. The agent's CLI takes the token from a flag or an environment variable, with no browser.", refs(existing));
   if (existing?.cli === "browser") return step("signup", "handoff", "A person creates the account and signs the CLI in through a browser; no token option was found in the pages read. The agent carries on from there.", refs(existing));
   if (existing) return step("signup", "handoff", "A person creates the account and gives the agent a key. The agent carries on from there.", refs(existing));

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 (2026-10-06)
+
+- `audit` no longer prints "A person steps in none documented." for a product whose agent holds the account itself; it says no person step is documented.
+- app.tansohq.com, same release: hosted live tests are back on, for workspaces a person owns (an agent's unclaimed workspace gets `403 claim_required` and runs its tests with the CLI). A hosted check proves the agent's key the way `verify` does, with no key and with a wrong key; the check report has the same three questions and fix prompts as `audit` (`GET /v1/runs/:id/audit`); the hosted agent may send only its run's inbox address; planner failures reach the operator log; long response bodies are shortened in reports.
+
 ## 0.3.0 (2026-10-06)
 
 - `verify` counts each run on a free Tanso workspace, the allowance the hosted dashboard uses: 6 starting runs, then 10 a day once a person claims the workspace. Paid runs are planned and have no price yet. The first `verify` asks before creating the workspace, and with `--yes` it needs `--create-account` as well. The key is saved in `~/.config/agent-ready/credentials.json` (0600, per API host), and `AGENT_READY_API_KEY` overrides it.
