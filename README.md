@@ -24,7 +24,7 @@ npx @tansohq/agent-ready test --check            # free: checks your setup and s
 npx @tansohq/agent-ready test                    # asks before it starts
 ```
 
-`check` writes `agent-ready.yml`; add a `verify_call` to it before `test` (see [Test with a real agent](#test-with-a-real-agent)). To skip `npx`, install once with `npm i -g @tansohq/agent-ready` and run `agent-ready check …`.
+`check` writes `agent-ready.yml`. `test` takes the call that checks the agent's key from your OpenAPI document when it can, and otherwise asks you to add a `verify_call` (see [Test with a real agent](#test-with-a-real-agent)). To skip `npx`, install once with `npm i -g @tansohq/agent-ready` and run `agent-ready check …`.
 
 ### With your coding agent
 
@@ -143,7 +143,11 @@ In CI: `npx @tansohq/agent-ready check $URL --fail-on high --json`, with `agent-
 npx @tansohq/agent-ready test
 ```
 
-`test` has a real agent (your local Claude Code) try the task in `agent-ready.yml` on your product, then checks the key it got with a call you declare. `check` writes the file; add the `verify_*` lines to it. A complete file:
+`test` has a real agent (your local Claude Code) try the task in `agent-ready.yml` on your product, then checks the key it got with one authenticated call. `check` writes the file.
+
+With no `verify_call` in it, `test` takes the call from your OpenAPI document: it reuses the latest `interface.json` that `check` wrote in `.agent-ready/<host>/` (or reads your public pages the same way `check` does), then picks a GET that needs a key and has no required parameters, preferring paths like `/me`, `/account`, `/user` and `/whoami`, on the document's first server. The header comes from the security scheme: a bearer scheme gives `Authorization: Bearer {key}`, and an API key in a header gives `<its name>: {key}`. In a terminal it asks `Will check with GET <url> (<header>). Use it? [Y/n]` and saves the call to `agent-ready.yml` on yes; `--yes` accepts and saves it; without either, the call is used for that run and not saved. `--json` marks it with `checker.inferred: true` and `checker.inferredFrom` (the OpenAPI document's URL) in both the plan and the result. When no operation fits (no OpenAPI document in JSON, or no GET with a bearer or header key and no required parameters), `test` exits `2` and asks for a `verify_call`.
+
+To choose the call yourself, add the `verify_*` lines. A complete file:
 
 ```yaml
 url: yourproduct.com
@@ -189,7 +193,7 @@ verify_fields: ACCOUNT_ID
 
 The agent installs CLIs inside the run folder (`.tools/`), since its sandbox can write nowhere else, and a CLI that saves a login is run with its home there too, so the login is scrubbed with everything else. A CLI built on Node's `fetch` reaches the network only on Node 22.21, or 24 and later (`NODE_USE_ENV_PROXY`); on older Node it fails to connect. When a person has to create the token first (`existing_account`), the agent stops at that step and says so, which verify counts as a correct handoff.
 
-You don't tell the agent where to save its key: the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`, and the checker reads them from there. When the product hands back several secrets, say in `task` which one the check uses (for Neon, "the identity assertion is the key"); without that, an agent may save the wrong one. Before the real run, `test --check` shows what it would do without starting the agent or sending a request to your product: whether Claude Code is installed and signed in, the hosts the agent may reach, the inbox, what the agent saves, and the calls the checker makes. It exits `0` when ready and `2` when not.
+You don't tell the agent where to save its key: the run asks it to write `AGENT_READY_KEY` (and each `verify_fields` name) to `work/CREDENTIAL.env`, and the checker reads them from there. When the product hands back several secrets, say in `task` which one the check uses (for Neon, "the identity assertion is the key"); without that, an agent may save the wrong one. Before the real run, `test --check` shows what it would do without starting the agent or sending a request to your product (with no `verify_call`, it reads your public docs to infer one, GET only): whether Claude Code is installed and signed in, the hosts the agent may reach, the inbox, what the agent saves, and the calls the checker makes. It exits `0` when ready and `2` when not.
 
 ```bash
 npx @tansohq/agent-ready test --check
@@ -214,7 +218,7 @@ It works on a product running on your machine too (`url: localhost:3000` means `
 
 It creates a real account on the product, named with the run id, and asks before starting (`--yes` skips the question). The agent can reach only the hosts listed under [Limits](#limits). For products that email a code or a link, set `AGENTMAIL_API_KEY` (an [AgentMail](https://agentmail.to) key): each run gets a fresh inbox, the agent reads the mail from it, and the inbox is deleted afterwards. Cosmic and Telnyx both passed this way. With no inbox (`AGENTMAIL_API_KEY` unset and no `--inbox`), the agent stops and says so where a product requires email. The key, claim codes, passwords in connection strings (`postgres://user:password@…`), and one-time codes and links in the agent's mail are scrubbed from every file after the check, and an assertion like `verify_assert: database_url` reports that the field is present, never its value. The agent may use only its test identity's email address: Claude Code tells the model the signed-in account's email, so a hook refuses any command, request or written file that carries another real address, and with no inbox the agent has no address at all.
 
-Exit codes: `0` passed (or a correct handoff when your onboarding model says a person sets access up first), `1` failed (a fix prompt is written to the run's `prompts/`), `2` usage error, missing `verify_call`, or Claude Code missing or signed out, `3` inconclusive (the product returned server errors, the run did not finish, or the verify call answers without a key), `130` cancelled.
+Exit codes: `0` passed (or a correct handoff when your onboarding model says a person sets access up first), `1` failed (a fix prompt is written to the run's `prompts/`), `2` usage error, no `verify_call` and none could be inferred, or Claude Code missing or signed out, `3` inconclusive (the product returned server errors, the run did not finish, or the verify call answers without a key), `130` cancelled.
 
 ## For agents and scripts
 

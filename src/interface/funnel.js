@@ -127,7 +127,7 @@ function pay(doc) {
   const refs = [...plans.flatMap((p) => (p.evidence || []).map((e) => e.obs)), ...paidText.flatMap((o) => (o.evidence || []).map((e) => e.obs))];
   // Pay-per-request wording is easy to misread: a billing product describing its own
   // customers' metering reads the same as an agent paying. Only a live test settles it.
-  if (perRequest) return step("pay", "not_checked", "The docs mention paying per request. A live test shows whether an agent can actually pay.", (perRequest.evidence || []).map((e) => e.obs));
+  if (perRequest) return step("pay", "not_checked", "The docs mention paying per request. A test with a real agent shows whether it can actually pay.", (perRequest.evidence || []).map((e) => e.obs));
   if (paidPlans.length || paidText.length) return step("pay", "needs_person", "Paid plans are published, but nothing documents a way for an agent to buy one, so a person has to check out.", refs);
   if (plans.length || observed.length) return step("pay", "not_checked", "Only free plans were found, so there is nothing to pay for yet.", refs);
   return step("pay", "not_checked", "No plans were found in the pages read.");
@@ -172,7 +172,7 @@ function summarize(steps) {
   const headline = !next
     ? `An agent gets through all ${steps.length} steps.`
     : next.state === "not_checked"
-      ? `An agent gets through ${passed} of ${steps.length} steps. ${next.name} needs a live test to go further.`
+      ? `An agent gets through ${passed} of ${steps.length} steps. ${next.name} needs a test to go further.`
       : `An agent gets through ${passed} of ${steps.length} steps. It stops at ${next.name}.`;
   return { headline, passed, of: steps.length, stopsAt: stop?.id || null, fixes: steps.filter((x) => x.fix).map((x) => ({ step: x.id, name: x.name, fix: x.fix })) };
 }
@@ -191,10 +191,10 @@ export function applyLiveTests(funnel, runs) {
   const steps = funnel.steps.map((step) => {
     const run = latest.get(step.id);
     if (!run) return step;
-    const live = { runId: run.id, name: run.flowName || run.name || "Live test", outcome: run.outcome, at: run.completedAt || run.updatedAt || null };
+    const live = { runId: run.id, name: run.flowName || run.name || "Test", outcome: run.outcome, at: run.completedAt || run.updatedAt || null };
     const { fix, ...rest } = step;
-    if (run.outcome === "passed") return { ...rest, state: "agent_did", reason: `A live agent did this step: ${live.name} passed its check.`, live };
-    return { ...rest, state: "blocked", reason: `A live agent was stopped here: ${run.summary || live.name}`, fix: FIX[step.id], live };
+    if (run.outcome === "passed") return { ...rest, state: "agent_did", reason: `The agent did this step: ${live.name} passed its check.`, live };
+    return { ...rest, state: "blocked", reason: `The agent was stopped here: ${run.summary || live.name}`, fix: FIX[step.id], live };
   });
   return { ...funnel, ...summarize(steps), steps };
 }

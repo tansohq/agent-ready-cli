@@ -23,10 +23,11 @@ import { validateInterface } from "../src/interface/schema.js";
 import { runHarness, TASKS } from "../src/harness/index.js";
 import { inspect, buildAudit, writeAudit, parseTarget, unreachableReason, DEFAULT_TASK } from "../src/audit/index.js";
 import { defaultAnswers, askQuestions, QUESTIONS, HOLDER_OPTIONS } from "../src/audit/questions.js";
-import { readConfig, writeConfig, CONFIG_FILE } from "../src/audit/config.js";
+import { readConfig, writeConfig, writeVerifyCall, CONFIG_FILE } from "../src/audit/config.js";
 import { makeStyle, renderVerdict, renderSteps, renderSummary } from "../src/audit/render.js";
 import { parseVerifySpec, buildVerifyTask, classify, failedStep, networkFor, describeSpec } from "../src/verify/index.js";
 import { renderVerify, renderPlan } from "../src/verify/render.js";
+import { inferVerifyCall } from "../src/verify/infer.js";
 import { renderPrompt } from "../src/audit/prompts.js";
 import { patternInfo } from "../src/audit/index.js";
 import { createInterface } from "node:readline/promises";
@@ -191,7 +192,7 @@ function claudeStatus() {
 program
   .command("test [url]")
   .alias("verify")
-  .description("Have a real agent try the task in agent-ready.yml on your product, then check its key with the call you declared. Creates an account on the product and uses your Claude Code.")
+  .description("Have a real agent try the task in agent-ready.yml on your product, then check its key with the call you declared, or one taken from its OpenAPI document. Creates an account on the product and uses your Claude Code.")
   .option("-y, --yes", "skip the confirmation")
   .option("--inbox <address>", "an inbox you will relay mail from into the run's work/inbox/, for products that email a code")
   .option("--max-turns <n>", "agent turn budget", (v) => parseInt(v, 10), 40)
@@ -199,25 +200,56 @@ program
   .option("--model <name>", "model for the agent")
   .option("--executor <name>", "agent runner", "claude-print")
   .option("--out <dir>", "run directory (default: .agent-ready/<host>/<runId>)")
-  .option("--check", "check the setup and print the run plan without starting the agent (free, sends nothing to the product)")
+  .option("--check", "check the setup and print the run plan without starting the agent (free; with no verify_call it reads the product's public docs to pick one, and otherwise sends nothing to the product)")
   .option("--json", "print the result to stdout")
   .option("--no-color", "plain output")
   .addHelpText("after", `
 Examples:
   agent-ready test --check          check Claude Code and agent-ready.yml, print the plan, run nothing
   agent-ready test                  use url, task and verify_call from agent-ready.yml
+                                    (no verify_call: one is taken from the product's OpenAPI document)
   agent-ready test --yes --json     no confirmation, JSON result (CI)`)
   .exitOverride(usageExit)
   .action(async (input, opts) => {
     const config = readConfig(join(process.cwd(), CONFIG_FILE));
-    if (!config) fail(opts, 2, "config_missing", `No ${CONFIG_FILE} here.`, `Run "agent-ready check <url> --yes" first, then add a verify_call to ${CONFIG_FILE}.`);
+    if (!config) fail(opts, 2, "config_missing", `No ${CONFIG_FILE} here.`, `Run "agent-ready check <url> --yes" first, which writes it.`);
     const url = parseTarget(input || config.url);
     if (!url) fail(opts, 2, "invalid_address", `"${input || config.url}" is not a web address.`, "Set url in agent-ready.yml, for example: url: example.com");
-    const spec = parseVerifySpec(config);
-    if (spec.error) fail(opts, 2, "verify_call_invalid", spec.error, `Add the call that proves an agent's key works to ${CONFIG_FILE}, for example: verify_call: GET https://api.example.com/v1/me`);
     const host = new URL(url).host;
     const task = config.task || DEFAULT_TASK;
     const style = makeStyle(Boolean(process.stderr.isTTY) && opts.color && !process.env.NO_COLOR && !opts.json);
+    const addCallHint = `Add the call that proves an agent's key works to ${CONFIG_FILE}, for example: verify_call: GET https://api.example.com/v1/me`;
+    // No verify_call: take one from the product's own OpenAPI document. It is saved only once accepted, by a
+    // person at the prompt or by --yes; otherwise it is used for this run alone.
+    let inferred = null;
+    if (!(config.verify_call || "").trim()) {
+      const live = !opts.json && Boolean(process.stderr.isTTY);
+      if (live) process.stderr.write(`  ${style.dim("No verify_call. Reading the product's API docs…")}`);
+      inferred = await inferVerifyCall({ url, version: pkg.version, cwd: process.cwd() });
+      if (live) process.stderr.write("\r\x1b[2K");
+      if (inferred.error) fail(opts, 2, "verify_call_invalid", `${CONFIG_FILE} has no verify_call, and none could be taken from the product's docs: ${inferred.error}.`, addCallHint);
+      let accepted = Boolean(opts.yes);
+      if (!accepted && process.stdin.isTTY && !opts.json) {
+        const rl = createInterface({ input: process.stdin, output: process.stderr });
+        const reply = await rl.question(`\n  Will check with ${inferred.call} (${inferred.headerName}). Use it? [Y/n] `).catch((err) => {
+          if (err.code === "ABORT_ERR") return "n";
+          throw err;
+        });
+        rl.close();
+        if (!/^(y(es)?)?$/i.test(reply.trim())) {
+          console.error(`  Cancelled. Nothing saved. ${addCallHint}`);
+          process.exit(130);
+        }
+        accepted = true;
+      } else if (!opts.json) console.error(`\n  Will check with ${inferred.call} (${inferred.headerName}).`);
+      if (accepted) {
+        writeVerifyCall(join(process.cwd(), CONFIG_FILE), inferred);
+        if (!opts.json) console.error(`  ${style.dim(`Saved to ${CONFIG_FILE}.`)}`);
+      } else if (!opts.json) console.error(`  ${style.dim(`Not saved to ${CONFIG_FILE}; pass --yes or run in a terminal to save it.`)}`);
+    }
+    const spec = parseVerifySpec(inferred ? { ...config, verify_call: inferred.call, verify_header: inferred.header } : config);
+    if (spec.error) fail(opts, 2, "verify_call_invalid", spec.error, addCallHint);
+    const checker = { inferred: Boolean(inferred), inferredFrom: inferred ? inferred.specUrl : null };
     if (opts.check) {
       const claude = opts.executor === "claude-print" ? claudeStatus() : { ok: true, detail: `executor ${opts.executor}` };
       const inbox = process.env.AGENTMAIL_API_KEY ? "AgentMail: a fresh inbox for this run, deleted after" : opts.inbox ? `you relay mail from ${opts.inbox} into work/inbox/` : "none (set AGENTMAIL_API_KEY if the product emails a code or link)";
@@ -228,7 +260,7 @@ Examples:
         task,
         claudeCode: claude,
         agent: { hosts: networkFor(url, spec), inbox, maxTurns: opts.maxTurns, maxBudgetUsd: opts.maxBudgetUsd, saves: ["AGENT_READY_KEY", ...spec.fields] },
-        checker: { call: describeSpec(spec), calls: ["with the agent's key: must answer " + spec.expect, "with no key: must be refused (400, 401 or 403)", "with a wrong key: must be refused"] },
+        checker: { call: describeSpec(spec), calls: ["with the agent's key: must answer " + spec.expect, "with no key: must be refused (400, 401 or 403)", "with a wrong key: must be refused"], ...checker },
       };
       if (opts.json) process.stdout.write(JSON.stringify(plan, null, 2) + "\n");
       else for (const line of renderPlan(plan, style)) console.error(line);
@@ -279,7 +311,7 @@ Examples:
       writeFileSync(join(out, "prompts", `01-${step}.md`), body);
       promptFile = relative(process.cwd(), join(out, "prompts", `01-${step}.md`));
     }
-    const summary = { schema: "agent-ready/verify@1", target: { url, host }, task, runId: id, outcome: verdict.outcome, reason: verdict.reason, checks: result.evaluation?.objects?.checks || [], turns: result.execution?.turns ?? null, costUsd: result.execution?.costUsd ?? null, folder: out, prompt: promptFile };
+    const summary = { schema: "agent-ready/verify@1", target: { url, host }, task, runId: id, outcome: verdict.outcome, reason: verdict.reason, checks: result.evaluation?.objects?.checks || [], turns: result.execution?.turns ?? null, costUsd: result.execution?.costUsd ?? null, folder: out, prompt: promptFile, checker: { call: describeSpec(spec), ...checker } };
     writeFileSync(join(out, "verify.json"), JSON.stringify(summary, null, 2));
     if (opts.json) process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
     else for (const line of renderVerify({ host, task, result, verdict, folder: relative(process.cwd(), out) || ".", promptFile }, style)) console.error(line);

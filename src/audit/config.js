@@ -56,3 +56,18 @@ export function writeConfig(path, { url, task, answers }) {
   ];
   writeFileSync(path, lines.join("\n"));
 }
+
+// Saves a verify_call that `test` inferred and the person accepted. Every other line stays as it is; the commented
+// examples `check` writes (or a verify_header already there) are replaced in place, and a file without them gets
+// the lines at the end.
+export function writeVerifyCall(path, { call, header }) {
+  const lines = readFileSync(path, "utf8").split("\n");
+  for (const [key, value] of [["verify_call", call], ["verify_header", header]]) {
+    const i = lines.findIndex((l) => new RegExp(`^(?:#\\s*)?${key}:`).test(l));
+    if (i === -1) {
+      if (lines[lines.length - 1] === "") lines.splice(lines.length - 1, 0, `${key}: ${value}`);
+      else lines.push(`${key}: ${value}`);
+    } else lines[i] = `${key}: ${value}`;
+  }
+  writeFileSync(path, lines.join("\n"));
+}

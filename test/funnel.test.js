@@ -46,7 +46,7 @@ test("steps public evidence cannot prove are not checked, and never count as a s
   const f = buildFunnel(doc({ pricing: { agentCanDetermineCost: verdict("yes"), ambiguities: [], plans: [{ id: "free", amount: 0 }] }, onboarding: { patterns: [{ id: "agent_is_customer", name: "Agent is the customer", status: "documented", needs: [] }] } }));
   assert.equal(f.steps.find((s) => s.id === "manage").state, "not_checked");
   assert.equal(f.stopsAt, null);
-  assert.match(f.headline, /Pay needs a live test to go further/);
+  assert.match(f.headline, /Pay needs a test to go further/);
 });
 
 test("robots.txt that blocks AI agents stops the funnel at Discover", () => {

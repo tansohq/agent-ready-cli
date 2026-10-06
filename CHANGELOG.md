@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1 (2026-10-06)
+
+- `test` works without `verify_*` lines. With no `verify_call` in `agent-ready.yml`, it takes one from the product's OpenAPI document: a GET that needs a key (a bearer scheme, or an API key in a header) and has no required parameters, preferring paths like `/me`, `/account`, `/user` and `/whoami`, on `servers[0]`. It reuses the latest `interface.json` from `check`, or reads the public pages the same way. In a terminal it asks before using the call; `--yes` accepts it. An accepted call is saved to `agent-ready.yml` as `verify_call` and `verify_header`, and the file's other lines stay as they were. With nothing to infer from, `test` still exits `2` with `verify_call_invalid`.
+- `agent-ready/verify-plan@1` and `agent-ready/verify@1` gain `checker.inferred` (true when the call was inferred) and `checker.inferredFrom` (the OpenAPI document's URL, or null). `agent-ready/verify@1` also gains `checker.call`. No field was removed or renamed.
+- Report steps say "The agent did this step" and "The agent was stopped here", without "live".
+- app.tansohq.com, same release: hosted test runs are paid. Each workspace gets 5 free a month, then $5.00 per completed run; inconclusive runs and our failures are free. An agent buys runs with `POST /v1/purchases` within a monthly cap ($50 by default, at most $200) that a person approves once through an approval link and Stripe Checkout; while a purchase waits for approval, new requests get that same purchase back, and `POST /v1/purchases/:id/approval-link` replaces a lost link. The dashboard is now Products, Tests, Docs and Account, and calls a saved task a test.
+
 ## 0.4.0 (2026-10-06)
 
 - `audit` is now `check` and `verify` is now `test`. The old names still work, so scripts and the skills keep running. The JSON schema names (`agent-ready/audit-report@1`, `agent-ready/verify@1`) are unchanged.

@@ -421,9 +421,10 @@ describe("verify: command", () => {
     assert.match(r.stderr, /Run "agent-ready check <url> --yes" first/);
   });
 
+  // Nothing listens on port 9, so the inference finds no OpenAPI document without leaving this machine.
   it("without a verify_call it exits 2 with an example", () => {
     const cwd = mkdtempSync(join(tmpdir(), "verify-cli-"));
-    writeConfig(join(cwd, "agent-ready.yml"), { url: "acme.dev", task: "Sign up", answers: { onboarding: { value: "try_then_claim" }, abuse_cost: { value: "low" }, human_before: { value: "never" } } });
+    writeConfig(join(cwd, "agent-ready.yml"), { url: "127.0.0.1:9", task: "Sign up", answers: { onboarding: { value: "try_then_claim" }, abuse_cost: { value: "low" }, human_before: { value: "never" } } });
     const r = runCli(["verify"], cwd);
     assert.equal(r.status, 2);
     assert.match(r.stderr, /verify_call: GET https:\/\/api\.example\.com\/v1\/me/);

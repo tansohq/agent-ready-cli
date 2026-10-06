@@ -14,7 +14,9 @@ A run creates a real account on the product and uses the developer's Claude Code
 
 Verify reads `agent-ready.yml` in the current directory. If it is missing, run `npx @tansohq/agent-ready check <url> --json --yes` first, which writes it.
 
-Add the call that proves a key works. Pick an authenticated read from the product's own API docs that refuses a request without a key:
+With no `verify_call`, `test` infers one from the product's OpenAPI document: a GET that needs a key (bearer, or an API key header) and has no required parameters, preferring `/me`, `/account`, `/user` or `/whoami`, on the document's first server. It reuses the latest `.agent-ready/<host>/*/interface.json` from `check`, or reads the public pages again. `--yes` accepts the call and saves it to `agent-ready.yml`; without `--yes` and without a terminal it is used for that run and not saved. With `--json`, the plan and the result carry `checker.inferred: true` and `checker.inferredFrom`. Show the developer the inferred call before a real run. When nothing fits, `test` exits `2` with `verify_call_invalid`; then add the call yourself.
+
+To choose the call, add it. Pick an authenticated read from the product's own API docs that refuses a request without a key:
 
 ```yaml
 verify_call: GET https://api.example.com/v1/me
@@ -39,7 +41,7 @@ Do not tell the agent where to save its key in `task`; the run asks it to write 
 npx @tansohq/agent-ready test --check --json
 ```
 
-This starts no agent and sends no request to the product. It prints `agent-ready/verify-plan@1`: whether Claude Code is installed and signed in (`claudeCode`), the hosts the agent may reach, the inbox, the turn and spending limits, what the agent saves and the calls the checker makes. It exits `0` when ready and `2` when Claude Code is missing or signed out (the fix is in `claudeCode.hint`).
+This starts no agent and sends no request to the product, except the public GETs that infer a missing `verify_call`. It prints `agent-ready/verify-plan@1`: whether Claude Code is installed and signed in (`claudeCode`), the hosts the agent may reach, the inbox, the turn and spending limits, what the agent saves and the calls the checker makes. It exits `0` when ready and `2` when Claude Code is missing or signed out (the fix is in `claudeCode.hint`).
 
 ## 3. Ask, then run
 
@@ -61,7 +63,7 @@ The JSON is `agent-ready/verify@1`. Report `outcome`, `reason`, each entry in `c
 | --- | --- | --- |
 | `0` | `passed` or `handoff` | The key works and no key and a wrong key were refused; or the agent correctly stopped where the onboarding model says a person sets access up first. |
 | `1` | `failed` | The agent got no key, or the checker's calls did not pass. `prompt` names a fix prompt in the run folder. |
-| `2` | | Usage or setup: missing `verify_call`, or Claude Code missing or signed out. |
+| `2` | | Usage or setup: no `verify_call` and none could be inferred, or Claude Code missing or signed out. |
 | `3` | `inconclusive` | Not a result about the product: server errors, a call that answers without a key, the agent could not connect, the spending cap, or a run that did not finish. Say why and suggest what to change. |
 | `130` | | Cancelled. |
 
