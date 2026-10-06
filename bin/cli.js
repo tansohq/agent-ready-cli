@@ -31,7 +31,6 @@ import { renderPrompt } from "../src/audit/prompts.js";
 import { patternInfo } from "../src/audit/index.js";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
-import { resolveKey, saveCredentials, forgetCredentials, credentialsPath, signup, startRun, finishRun, account, describeUsage, apiBase, KEY_ENV } from "../src/account/index.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, "..", "package.json"), "utf8"));
@@ -62,29 +61,6 @@ function fail(opts, exitCode, code, message, hint = null, extra = {}) {
   process.exit(exitCode);
 }
 
-// Exit codes for the Tanso workspace, kept apart from 1 (failed) and 2 (usage): 4 no workspace or key, 75 try again
-// later (the API is unreachable or today's runs are used), 77 the starting runs are used and a person must claim.
-const EXIT_NO_WORKSPACE = 4;
-const EXIT_TRY_LATER = 75;
-const EXIT_CLAIM = 77;
-
-function claimHint(saved) {
-  return saved?.claimUrl ? `A person claims it at ${saved.claimUrl} with the code from "agent-ready account --claim"; the same key then gets 10 runs a day.` : 'A person claims it with the code from "agent-ready account --claim"; the same key then gets 10 runs a day.';
-}
-
-// Counts the run before the agent starts. Refuses, without starting anything, when the allowance is spent or the API
-// cannot be reached: a run that is never counted would be a free run for anyone who blocks the host.
-async function startCountedRun(opts, workspace) {
-  try {
-    return await startRun(workspace.key);
-  } catch (err) {
-    if (err.code === "run_limit_reached" && err.details.window === "lifetime") fail(opts, EXIT_CLAIM, err.code, `This workspace has used its ${err.details.limit} starting runs. Nothing ran.`, claimHint(workspace.saved), { next_action: "claim", limit: err.details.limit, window: "lifetime", claimed: false });
-    if (err.code === "run_limit_reached") fail(opts, EXIT_TRY_LATER, err.code, `This workspace has used today's ${err.details.limit} runs. Nothing ran.`, err.details.resetsAt ? `The next run frees up at ${err.details.resetsAt}.` : "Try again later.", { next_action: "wait", limit: err.details.limit, window: err.details.window, resets_at: err.details.resetsAt || null, claimed: true });
-    if (err.code === "unreachable") fail(opts, EXIT_TRY_LATER, err.code, `${err.message} No run was used.`, "Check your connection and try again.", { next_action: "retry" });
-    if (err.status === 401 || err.status === 403) fail(opts, EXIT_NO_WORKSPACE, "key_rejected", `The Tanso API did not accept the ${workspace.source === "env" ? KEY_ENV : "saved"} key. Nothing ran.`, workspace.source === "env" ? `Check ${KEY_ENV}.` : 'Run "agent-ready logout", then "agent-ready verify --create-account" for a new workspace.', { next_action: "replace_key" });
-    throw err;
-  }
-}
 
 // Usage errors (a missing argument, an unknown option) exit 2, so 1 keeps meaning "fixes found"; with --json they
 // also arrive as JSON. Help and --version exit 0.
@@ -96,7 +72,8 @@ function usageExit(err) {
 const QUESTION_FLAGS = { onboarding: "onboarding", abuseCost: "abuse_cost", humanBefore: "human_before" };
 
 program
-  .command("audit <url>")
+  .command("check <url>")
+  .alias("audit")
   .description("Check whether AI agents can find, sign up for, use and pay for your product. Reads public pages only, asks how agents should onboard, and writes a fix prompt for each gap.")
   .option("-y, --yes", "accept the defaults without asking")
   .option("--ask", `ask again even if ${CONFIG_FILE} has answers`)
@@ -110,12 +87,12 @@ program
   .option("--no-color", "plain output")
   .addHelpText("after", `
 Examples:
-  agent-ready audit example.com                           ask 3 questions, write fix prompts
-  agent-ready audit example.com --yes                     use the defaults, no questions
-  agent-ready audit example.com --fail-on high --json     for CI
-  agent-ready audit example.com --onboarding existing_account --human-before always --json
+  agent-ready check example.com                           ask 3 questions, write fix prompts
+  agent-ready check example.com --yes                     use the defaults, no questions
+  agent-ready check example.com --fail-on high --json     for CI
+  agent-ready check example.com --onboarding existing_account --human-before always --json
                                                           answer the questions with flags (agents, CI)`)
-  .showHelpAfterError("  Try: agent-ready audit example.com")
+  .showHelpAfterError("  Try: agent-ready check example.com")
   // Usage errors exit 2, so 1 keeps meaning "fixes found". Help and --version still exit 0.
   .exitOverride(usageExit)
   .action(async (input, opts) => {
@@ -126,7 +103,7 @@ Examples:
     }
     const flagged = Object.keys(QUESTION_FLAGS).some((flag) => opts[flag]);
     const url = parseTarget(input);
-    if (!url) fail(opts, 2, "invalid_address", `"${input}" is not a web address.`, "Try: agent-ready audit example.com");
+    if (!url) fail(opts, 2, "invalid_address", `"${input}" is not a web address.`, "Try: agent-ready check example.com");
     const host = new URL(url).host;
     const style = makeStyle(Boolean(process.stderr.isTTY) && opts.color && !process.env.NO_COLOR && !opts.json);
     const say = opts.json ? () => {} : (line = "") => console.error(line);
@@ -135,12 +112,12 @@ Examples:
     const savedHere = saved && saved.url && new URL(saved.url.startsWith("http") ? saved.url : `https://${saved.url}`).host === host ? saved : null;
     // Answering any question by flag means the caller is not a person at a terminal: the rest take their defaults.
     const interactive = Boolean(process.stdin.isTTY) && !opts.yes && !opts.json && !flagged && (!savedHere || opts.ask);
-    if (!interactive && !opts.yes && !flagged && !savedHere) fail(opts, 2, "answers_required", `No answers for ${host}.`, `Run "agent-ready audit ${host}" in a terminal to answer the questions, pass --yes for the defaults, or answer with --onboarding, --abuse-cost and --human-before.`);
+    if (!interactive && !opts.yes && !flagged && !savedHere) fail(opts, 2, "answers_required", `No answers for ${host}.`, `Run "agent-ready check ${host}" in a terminal to answer the questions, pass --yes for the defaults, or answer with --onboarding, --abuse-cost and --human-before.`);
 
     const id = newRunId();
     const out = resolve(opts.out || runDir(process.cwd(), { url }, id));
     say("");
-    say(`  ${style.bold("agent-ready audit")} · ${host}`);
+    say(`  ${style.bold("agent-ready check")} · ${host}`);
     const live = !opts.json && Boolean(process.stderr.isTTY);
     if (live) process.stderr.write(`  ${style.dim("Reading public pages…")}`);
     const { doc, funnel } = await inspect({ url, version: pkg.version, runId: id });
@@ -196,34 +173,24 @@ function parseBudget(value) {
   return usd;
 }
 
-// The workspace as `verify --check` and `account` report it. Never signs up.
-async function workspaceStatus() {
-  const workspace = resolveKey();
-  if (!workspace.key) return { exists: false, api: apiBase(), detail: "none yet; the first verify creates one (6 starting runs)" };
-  try {
-    const info = await account(workspace.key);
-    return { exists: true, api: apiBase(), source: workspace.source, workspace: info.id, claimed: info.claimed, runs: info.runs, detail: `${info.claimed ? "claimed" : "unclaimed"}${describeUsage(info.runs) ? `, ${describeUsage(info.runs)}` : ""}` };
-  } catch (err) {
-    return { exists: true, api: apiBase(), source: workspace.source, error: err.code, detail: `could not read it: ${err.message}` };
-  }
-}
 
 // Claude Code runs the agent. Missing or signed out, the run cannot start: a setup step, not a result.
 function claudeStatus() {
   const version = spawnSync("claude", ["--version"], { encoding: "utf8" });
-  if (version.error) return { ok: false, code: "claude_code_missing", detail: "verify runs the agent with Claude Code, and the claude command was not found.", hint: "Install it from https://claude.com/claude-code, sign in, then run agent-ready verify again." };
+  if (version.error) return { ok: false, code: "claude_code_missing", detail: "test runs the agent with Claude Code, and the claude command was not found.", hint: "Install it from https://claude.com/claude-code, sign in, then run agent-ready test again." };
   const found = `Claude Code ${version.stdout.trim().split(/\s/)[0]}`;
   if (process.env.ANTHROPIC_API_KEY) return { ok: true, detail: `${found}, using ANTHROPIC_API_KEY` };
   const status = spawnSync("claude", ["auth", "status"], { encoding: "utf8" });
   let loggedIn = null;
   try { loggedIn = JSON.parse(status.stdout).loggedIn; }
   catch { return { ok: true, detail: `${found}, sign-in not checked (this version has no "claude auth status")` }; }
-  if (loggedIn === false) return { ok: false, code: "claude_code_signed_out", detail: `${found} is installed but not signed in.`, hint: 'Run "claude auth login", then run agent-ready verify again.' };
+  if (loggedIn === false) return { ok: false, code: "claude_code_signed_out", detail: `${found} is installed but not signed in.`, hint: 'Run "claude auth login", then run agent-ready test again.' };
   return { ok: true, detail: `${found}, signed in` };
 }
 
 program
-  .command("verify [url]")
+  .command("test [url]")
+  .alias("verify")
   .description("Have a real agent try the task in agent-ready.yml on your product, then check its key with the call you declared. Creates an account on the product and uses your Claude Code.")
   .option("-y, --yes", "skip the confirmation")
   .option("--inbox <address>", "an inbox you will relay mail from into the run's work/inbox/, for products that email a code")
@@ -232,19 +199,18 @@ program
   .option("--model <name>", "model for the agent")
   .option("--executor <name>", "agent runner", "claude-print")
   .option("--out <dir>", "run directory (default: .agent-ready/<host>/<runId>)")
-  .option("--create-account", "create a free Tanso workspace for this machine if there is none (needed with --yes)")
   .option("--check", "check the setup and print the run plan without starting the agent (free, sends nothing to the product)")
   .option("--json", "print the result to stdout")
   .option("--no-color", "plain output")
   .addHelpText("after", `
 Examples:
-  agent-ready verify --check          check Claude Code and agent-ready.yml, print the plan, run nothing
-  agent-ready verify                  use url, task and verify_call from agent-ready.yml
-  agent-ready verify --yes --json     no confirmation, JSON result (CI); needs a workspace, or add --create-account`)
+  agent-ready test --check          check Claude Code and agent-ready.yml, print the plan, run nothing
+  agent-ready test                  use url, task and verify_call from agent-ready.yml
+  agent-ready test --yes --json     no confirmation, JSON result (CI)`)
   .exitOverride(usageExit)
   .action(async (input, opts) => {
     const config = readConfig(join(process.cwd(), CONFIG_FILE));
-    if (!config) fail(opts, 2, "config_missing", `No ${CONFIG_FILE} here.`, `Run "agent-ready audit <url> --yes" first, then add a verify_call to ${CONFIG_FILE}.`);
+    if (!config) fail(opts, 2, "config_missing", `No ${CONFIG_FILE} here.`, `Run "agent-ready check <url> --yes" first, then add a verify_call to ${CONFIG_FILE}.`);
     const url = parseTarget(input || config.url);
     if (!url) fail(opts, 2, "invalid_address", `"${input || config.url}" is not a web address.`, "Set url in agent-ready.yml, for example: url: example.com");
     const spec = parseVerifySpec(config);
@@ -263,19 +229,15 @@ Examples:
         claudeCode: claude,
         agent: { hosts: networkFor(url, spec), inbox, maxTurns: opts.maxTurns, maxBudgetUsd: opts.maxBudgetUsd, saves: ["AGENT_READY_KEY", ...spec.fields] },
         checker: { call: describeSpec(spec), calls: ["with the agent's key: must answer " + spec.expect, "with no key: must be refused (400, 401 or 403)", "with a wrong key: must be refused"] },
-        workspace: await workspaceStatus(),
       };
-      if (plan.workspace.runs?.limited && plan.workspace.runs.remaining === 0) plan.ready = false;
       if (opts.json) process.stdout.write(JSON.stringify(plan, null, 2) + "\n");
       else for (const line of renderPlan(plan, style)) console.error(line);
       process.exit(plan.ready ? 0 : 2);
     }
-    let workspace = resolveKey();
     if (!opts.yes) {
-      if (!process.stdin.isTTY) fail(opts, 2, "confirmation_required", "verify runs a real agent that creates an account on the product.", "Pass --yes to run it without a terminal.");
+      if (!process.stdin.isTTY) fail(opts, 2, "confirmation_required", "test runs a real agent that creates an account on the product.", "Pass --yes to run it without a terminal.");
       const rl = createInterface({ input: process.stdin, output: process.stderr });
-      const newWorkspace = workspace.key ? "" : `\n  It also creates a free Tanso workspace for this machine, which counts your runs: 6 to start,\n  10 a day once a person claims it. Tanso receives the run count and outcome, never ${host} or the agent's work.`;
-      const reply = await rl.question(`\n  A real agent will try to sign up on ${host} using your Claude Code.\n  It creates an account named with the run id. Model use is capped at $${opts.maxBudgetUsd} (--max-budget-usd);\n  October runs cost $0.06 to $0.47, and cost depends on your Claude Code model.${newWorkspace}\n  Continue? [y/N] `).catch((err) => {
+      const reply = await rl.question(`\n  A real agent will try to sign up on ${host} using your Claude Code.\n  It creates an account named with the run id. Model use is capped at $${opts.maxBudgetUsd} (--max-budget-usd);\n  October runs cost $0.06 to $0.47, and cost depends on your Claude Code model.\n  Continue? [y/N] `).catch((err) => {
         if (err.code === "ABORT_ERR") return "";
         throw err;
       });
@@ -291,21 +253,6 @@ Examples:
       const claude = claudeStatus();
       if (!claude.ok) fail(opts, 2, claude.code, claude.detail, claude.hint);
     }
-    // With --yes nobody was asked, so creating a workspace needs its own flag.
-    if (!workspace.key && opts.yes && !opts.createAccount) fail(opts, EXIT_NO_WORKSPACE, "workspace_required", `verify counts each run on a free Tanso workspace, and there is none on this machine yet. Nothing ran.`, `Rerun with --create-account to create one (6 starting runs, nothing about ${host} is sent), or set ${KEY_ENV}.`, { next_action: "create_account" });
-    if (!workspace.key) {
-      let created;
-      try { created = await signup(pkg.version); }
-      catch (err) {
-        if (err.code === "unreachable") fail(opts, EXIT_TRY_LATER, err.code, `${err.message} No workspace was created and nothing ran.`, "Check your connection and try again.", { next_action: "retry" });
-        if (err.code === "signup_rate_limited") fail(opts, EXIT_TRY_LATER, err.code, err.message, null, { next_action: "wait", resets_at: err.details.resetsAt || null });
-        throw err;
-      }
-      const path = saveCredentials({ key: created.key, workspace: created.workspace, claimCode: created.claimCode, claimUrl: created.claimUrl });
-      workspace = resolveKey();
-      if (!opts.json) console.error(`\n  ${style.dim(`Created a free Tanso workspace; its key is saved in ${path}.`)}`);
-    }
-    const counted = await startCountedRun(opts, workspace);
     const id = newRunId();
     const out = resolve(opts.out || runDir(process.cwd(), { url }, id));
     const mailKey = process.env.AGENTMAIL_API_KEY || null;
@@ -321,11 +268,6 @@ Examples:
     if (live) process.stderr.write("\r\x1b[2K");
     const resultMd = existsSync(join(out, "work", "RESULT.md")) ? readFileSync(join(out, "work", "RESULT.md"), "utf8") : "";
     const verdict = classify(result, config.onboarding, resultMd);
-    // An agent that never launched gives its run back; every other ending keeps it counted.
-    const started = !String(result.execution?.stoppedBecause || "").startsWith("spawn failed");
-    let runs = counted.usage;
-    try { runs = (await finishRun(workspace.key, counted.run.id, started ? verdict.outcome : "not_started")).usage; }
-    catch (err) { console.error(`  Warning: could not report this run's outcome to Tanso (${err.message}). The result below stands.`); }
 
     let promptFile = null;
     if (verdict.outcome === "failed") {
@@ -337,56 +279,21 @@ Examples:
       writeFileSync(join(out, "prompts", `01-${step}.md`), body);
       promptFile = relative(process.cwd(), join(out, "prompts", `01-${step}.md`));
     }
-    const summary = { schema: "agent-ready/verify@1", target: { url, host }, task, runId: id, outcome: verdict.outcome, reason: verdict.reason, checks: result.evaluation?.objects?.checks || [], turns: result.execution?.turns ?? null, costUsd: result.execution?.costUsd ?? null, folder: out, prompt: promptFile, runs: runs?.limited ? { remaining: runs.remaining, limit: runs.limit, window: runs.window } : null };
+    const summary = { schema: "agent-ready/verify@1", target: { url, host }, task, runId: id, outcome: verdict.outcome, reason: verdict.reason, checks: result.evaluation?.objects?.checks || [], turns: result.execution?.turns ?? null, costUsd: result.execution?.costUsd ?? null, folder: out, prompt: promptFile };
     writeFileSync(join(out, "verify.json"), JSON.stringify(summary, null, 2));
     if (opts.json) process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
-    else for (const line of renderVerify({ host, task, result, verdict, folder: relative(process.cwd(), out) || ".", promptFile, runsLeft: describeUsage(runs) }, style)) console.error(line);
+    else for (const line of renderVerify({ host, task, result, verdict, folder: relative(process.cwd(), out) || ".", promptFile }, style)) console.error(line);
     process.exitCode = verdict.exitCode;
   });
 
-program
-  .command("account")
-  .description("Show this machine's Tanso workspace: runs left and whether a person has claimed it. Never creates one.")
-  .option("--claim", "also print the claim code, which lets a person adopt this workspace (treat it like a password)")
-  .option("--json", "print the status to stdout")
-  .exitOverride(usageExit)
-  .action(async (opts) => {
-    const status = await workspaceStatus();
-    const saved = resolveKey().saved;
-    const claim = !status.claimed && saved?.claimCode ? { url: saved.claimUrl || null, code: opts.claim ? saved.claimCode : null } : null;
-    const nextAction = !status.exists ? "create_account" : status.error ? "retry" : status.claimed ? null : "claim";
-    if (opts.json) process.stdout.write(JSON.stringify({ schema: "agent-ready/account@1", ...status, claim, next_action: nextAction }, null, 2) + "\n");
-    else {
-      console.error(`\n  Tanso workspace (${status.api})`);
-      console.error(`  ${status.exists ? `${status.workspace || "saved key"}: ${status.detail}` : status.detail}`);
-      if (status.exists && status.source) console.error(`  Key from ${status.source === "env" ? KEY_ENV : credentialsPath()}`);
-      if (claim) console.error(claim.code ? `  To claim it, a person opens ${claim.url || "the claim page"} and enters ${claim.code}.` : `  ${claimHint(saved)}`);
-      console.error("");
-    }
-    process.exitCode = !status.exists ? EXIT_NO_WORKSPACE : status.error ? EXIT_TRY_LATER : 0;
-  });
-
-program
-  .command("login")
-  .description(`Save the key of an existing Tanso workspace on this machine, read from standard input (for example a claimed workspace's key on a second machine).`)
-  .exitOverride(usageExit)
-  .action(async () => {
-    let key = "";
-    for await (const chunk of process.stdin) key += chunk;
-    key = key.trim();
-    if (!key) fail({}, 2, "key_missing", "No key on standard input.", "Pipe it in, for example: agent-ready login < key.txt");
-    try { await account(key); }
-    catch (err) { fail({}, err.status === 401 || err.status === 403 ? EXIT_NO_WORKSPACE : EXIT_TRY_LATER, err.code, `The key was not saved: ${err.message}`); }
-    console.error(`  Saved in ${saveCredentials({ key })}.`);
-  });
-
-program
-  .command("logout")
-  .description("Remove this machine's saved Tanso workspace key. The workspace itself is kept.")
-  .exitOverride(usageExit)
-  .action(() => {
-    console.error(forgetCredentials() ? `  Removed the saved key for ${new URL(apiBase()).host}.` : "  No saved key to remove.");
-  });
+// 0.3 kept a Tanso workspace for verify runs. Test runs on your machine are free and need no account now; these
+// commands stay so scripts written for 0.3 get a clear answer instead of "unknown command".
+for (const name of ["account", "login", "logout"]) {
+  program
+    .command(name, { hidden: true })
+    .allowUnknownOption()
+    .action(() => console.error("  agent-ready no longer needs a Tanso account: check and test on your machine are free. Nothing to do."));
+}
 
 program
   .command("scan [url]", { hidden: true })
@@ -461,7 +368,7 @@ program
 
 program
   .command("execute")
-  .description("Run one of the built-in example tasks against a public product with a real agent, as in examples/. For your own product, use `agent-ready verify`.")
+  .description("Run one of the built-in example tasks against a public product with a real agent, as in examples/. For your own product, use `agent-ready test`.")
   .requiredOption("--task <id>", `task id: ${Object.keys(TASKS).join(", ")}`)
   .option("--out <dir>", "run directory (default: .agent-ready/<host>/<runId>)")
   .option("--mode <mode>", "signup (agent obtains its own key as a synthetic persona; creates an account), given (key from env), none (stop at credential_required). Default: given if the key is set, else none")

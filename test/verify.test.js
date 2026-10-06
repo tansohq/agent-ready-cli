@@ -415,10 +415,10 @@ describe("verify: output", () => {
 describe("verify: command", () => {
   const runCli = (args, cwd) => spawnSync(process.execPath, [CLI, ...args], { cwd, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
 
-  it("without agent-ready.yml it exits 2 and says to run audit first", () => {
+  it("without agent-ready.yml it exits 2 and says to run check first", () => {
     const r = runCli(["verify"], mkdtempSync(join(tmpdir(), "verify-cli-")));
     assert.equal(r.status, 2);
-    assert.match(r.stderr, /Run "agent-ready audit <url> --yes" first/);
+    assert.match(r.stderr, /Run "agent-ready check <url> --yes" first/);
   });
 
   it("without a verify_call it exits 2 with an example", () => {

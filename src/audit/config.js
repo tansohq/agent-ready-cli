@@ -21,9 +21,9 @@ export function writeConfig(path, { url, task, answers }) {
   const verifyKeys = KEYS.filter((k) => k.startsWith("verify_"));
   const filledIn = verifyKeys.filter((k) => kept[k]);
   const verifyLines = filledIn.length
-    ? ["# What `agent-ready verify` checks: one call made with the key the agent got.", ...filledIn.map((k) => `${k}: ${kept[k]}`)]
+    ? ["# What `agent-ready test` checks: one call made with the key the agent got.", ...filledIn.map((k) => `${k}: ${kept[k]}`)]
     : [
-        "# What `agent-ready verify` checks: one call made with the key the agent got. Uncomment and fill in.",
+        "# What `agent-ready test` checks: one call made with the key the agent got. Uncomment and fill in.",
         "# The checker also makes it with no key and with a wrong key; both must be refused (400, 401 or 403).",
         "# verify_call: GET https://api.example.com/v1/me",
         "# verify_header: Authorization: Bearer {key}",
@@ -41,7 +41,7 @@ export function writeConfig(path, { url, task, answers }) {
         "#",
         "# The agent saves its key as AGENT_READY_KEY (and each verify_fields name) in work/CREDENTIAL.env;",
         "# the task does not need to say so, but should name which value is the key when the product returns several.",
-        "# Run `agent-ready verify --check` to see the plan before a real run.",
+        "# Run `agent-ready test --check` to see the plan before a real run.",
       ];
   const lines = [
     "# agent-ready: how agents should onboard to this product. Edit and commit.",

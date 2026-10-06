@@ -20,7 +20,7 @@ const HUMAN_RULE = {
 
 function whySection(finding, doc) {
   const urls = finding.basedOn.map((id) => doc.observations.find((o) => o.id === id)?.url).filter(Boolean);
-  const lines = ["## Why", `agent-ready audit found: ${finding.reason}`];
+  const lines = ["## Why", `agent-ready check found: ${finding.reason}`];
   if (urls.length) lines.push(`Evidence: ${[...new Set(urls)].slice(0, 5).join(", ")}`);
   return lines.join("\n");
 }
@@ -39,7 +39,7 @@ function numbered(title, items) {
 }
 
 function closing(url) {
-  return ["## When done", `Run \`npx @tansohq/agent-ready audit ${url}\` again. This finding should be gone. A static audit shows the path is documented; only a real agent run shows it works.`].join("\n");
+  return ["## When done", `Run \`npx @tansohq/agent-ready check ${url}\` again. This finding should be gone. A static audit shows the path is documented; only a real agent run shows it works.`].join("\n");
 }
 
 const RATE_LIMIT = "Rate-limit by client IP and globally per hour. Take the client IP from the socket or from a proxy that overwrites X-Forwarded-For; never trust a client-appended X-Forwarded-For.";

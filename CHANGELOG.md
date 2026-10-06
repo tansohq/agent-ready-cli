@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0 (2026-10-06)
+
+- `audit` is now `check` and `verify` is now `test`. The old names still work, so scripts and the skills keep running. The JSON schema names (`agent-ready/audit-report@1`, `agent-ready/verify@1`) are unchanged.
+- The CLI needs no Tanso account any more: `check` and `test` on your machine are free and send nothing to Tanso. 0.3's workspace (signup, counted runs, claim codes, `--create-account`, exit codes 4, 75 and 77) is gone from the CLI, and `account`, `login` and `logout` now only say that nothing is needed. Paying for runs is planned for the hosted dashboard, where Tanso pays for the model.
+
 ## 0.3.1 (2026-10-06)
 
 - `audit` no longer prints "A person steps in none documented." for a product whose agent holds the account itself; it says no person step is documented.

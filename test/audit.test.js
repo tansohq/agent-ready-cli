@@ -297,16 +297,16 @@ describe("audit: command", () => {
     const cwd = mkdtempSync(join(tmpdir(), "audit-cli-"));
     const bad = runCli(["audit", "ht!tp://bad url", "--yes"], cwd);
     assert.equal(bad.status, 2);
-    assert.match(bad.stderr, /is not a web address\.\s+Try: agent-ready audit example\.com/);
+    assert.match(bad.stderr, /is not a web address\.\s+Try: agent-ready check example\.com/);
     const missing = runCli(["audit"], cwd);
     assert.equal(missing.status, 2);
-    assert.match(missing.stderr, /Try: agent-ready audit example\.com/);
+    assert.match(missing.stderr, /Try: agent-ready check example\.com/);
   });
 
   it("--help shows example commands and exits 0", () => {
     const r = runCli(["audit", "--help"], mkdtempSync(join(tmpdir(), "audit-cli-")));
     assert.equal(r.status, 0);
-    assert.match(r.stdout, /Examples:\n  agent-ready audit example\.com /);
+    assert.match(r.stdout, /Examples:\n  agent-ready check example\.com /);
   });
 
   it("--yes never overwrites an agent-ready.yml that is already there", () => {

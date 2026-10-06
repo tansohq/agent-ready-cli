@@ -1,4 +1,4 @@
-// Terminal output for `agent-ready audit`. Written to stderr; --json goes to stdout. Color only on a TTY,
+// Terminal output for `agent-ready check`. Written to stderr; --json goes to stdout. Color only on a TTY,
 // never with NO_COLOR or --no-color. Every line reads the same with color stripped, and fits 80 columns.
 
 export function makeStyle(enabled) {
@@ -69,7 +69,7 @@ export function renderSummary(audit, paths, style, relative, savedTo) {
       const high = f.severity === "high" ? `  ${style.red("high")}` : "";
       out.push(`    ${style.bold(String(f.n).padStart(2, "0"))}  ${f.name.padEnd(10)}${f.title}${high}`);
     }
-    out.push("", `  ${style.bold("Next")}  paste this prompt into your coding agent:`, `        ${relative(paths.promptsDir)}/${audit.findings[0].file}`, `        then run ${style.bold(`npx @tansohq/agent-ready audit ${audit.target.host}`)} again`);
+    out.push("", `  ${style.bold("Next")}  paste this prompt into your coding agent:`, `        ${relative(paths.promptsDir)}/${audit.findings[0].file}`, `        then run ${style.bold(`npx @tansohq/agent-ready check ${audit.target.host}`)} again`);
   }
   out.push("", `  ${style.dim(`Folder  ${relative(paths.folder)}/`)}`, `  ${style.dim(`        ${audit.findings.length ? "prompts/ for the fixes · " : ""}brief.md for security, legal, billing`)}`, "");
   return out;

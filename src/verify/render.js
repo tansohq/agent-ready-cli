@@ -1,6 +1,6 @@
 import { wrap } from "../audit/render.js";
 
-// Terminal output for `agent-ready verify`, in the same layout as audit: one row per check, the result after.
+// Terminal output for `agent-ready test`, in the same layout as audit: one row per check, the result after.
 
 const OUTCOME = { passed: "PASS", handoff: "PASS (handoff)", failed: "FAIL", inconclusive: "INCONCLUSIVE" };
 
@@ -20,8 +20,8 @@ export function verifyRows(result) {
   return rows;
 }
 
-export function renderVerify({ host, task, result, verdict, folder, promptFile, runsLeft = null }, style) {
-  const out = ["", `  ${style.bold("agent-ready verify")} · ${host}`, ...wrap(`Task: ${task}`, 76).map((l) => `  ${style.dim(l)}`), ""];
+export function renderVerify({ host, task, result, verdict, folder, promptFile }, style) {
+  const out = ["", `  ${style.bold("agent-ready test")} · ${host}`, ...wrap(`Task: ${task}`, 76).map((l) => `  ${style.dim(l)}`), ""];
   // Same width rule as audit: every line fits 80 columns, continuation lines indented under the detail.
   for (const r of verifyRows(result)) {
     const [first = "", ...rest] = wrap(r.detail, 80 - 23);
@@ -33,15 +33,14 @@ export function renderVerify({ host, task, result, verdict, folder, promptFile, 
   const execution = result.execution || {};
   const cost = typeof execution.costUsd === "number" ? ` · $${execution.costUsd.toFixed(2)}` : "";
   out.push(`  ${style.dim(`${execution.turns ?? "?"} turns${cost} · evidence in ${folder}/`)}`);
-  if (runsLeft) out.push(`  ${style.dim(`${runsLeft} on this machine's Tanso workspace`)}`);
-  if (promptFile) out.push("", `  ${style.bold("Next")}  paste ${promptFile} into your coding agent,`, `        then run ${style.bold("npx @tansohq/agent-ready verify")} again`);
+  if (promptFile) out.push("", `  ${style.bold("Next")}  paste ${promptFile} into your coding agent,`, `        then run ${style.bold("npx @tansohq/agent-ready test")} again`);
   out.push("");
   return out;
 }
 
-// `verify --check`: what a run would do, in the same row layout, so the one paid run holds no surprises.
+// `test --check`: what a run would do, in the same row layout, so the one paid run holds no surprises.
 export function renderPlan(plan, style) {
-  const out = ["", `  ${style.bold("agent-ready verify --check")} · ${plan.target.host}`, ...wrap(`Task: ${plan.task}`, 76).map((l) => `  ${style.dim(l)}`), ""];
+  const out = ["", `  ${style.bold("agent-ready test --check")} · ${plan.target.host}`, ...wrap(`Task: ${plan.task}`, 76).map((l) => `  ${style.dim(l)}`), ""];
   const row = (pass, label, detail) => {
     const [first = "", ...rest] = wrap(detail, 80 - 23);
     out.push(`  ${mark(pass, style)} ${label.padEnd(18)} ${first}`);
@@ -54,10 +53,9 @@ export function renderPlan(plan, style) {
   row(null, "Agent saves", `${plan.agent.saves.join(" and ")} in work/CREDENTIAL.env (the harness asks for them; the task need not)`);
   row(null, "Checker calls", plan.checker.call);
   for (const c of plan.checker.calls) row(null, "", c);
-  if (plan.workspace) row(plan.workspace.runs?.limited && plan.workspace.runs.remaining === 0 ? false : null, "Tanso workspace", plan.workspace.detail);
   out.push("");
-  if (plan.ready) out.push(`  ${style.bold(style.green("READY"))}  Nothing ran. Start the agent with ${style.bold("npx @tansohq/agent-ready verify")}`);
-  else out.push(`  ${style.bold(style.red("NOT READY"))}  ${plan.claudeCode.ok ? 'The workspace has no runs left. See "agent-ready account".' : plan.claudeCode.hint}`);
+  if (plan.ready) out.push(`  ${style.bold(style.green("READY"))}  Nothing ran. Start the agent with ${style.bold("npx @tansohq/agent-ready test")}`);
+  else out.push(`  ${style.bold(style.red("NOT READY"))}  ${plan.claudeCode.hint}`);
   out.push(`  ${style.dim("A host the agent needs is missing? Add it to verify_hosts in agent-ready.yml.")}`, "");
   return out;
 }

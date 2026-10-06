@@ -1,7 +1,7 @@
 import { defineSignupTask } from "../harness/tasks/signup.js";
 import { registrableDomain } from "../interface/sources.js";
 
-// agent-ready verify: a real agent tries the task on the user's own product, and a separate checker decides.
+// agent-ready test: a real agent tries the task on the user's own product, and a separate checker decides.
 // The checker is the call the user declared in agent-ready.yml, made three times: with the agent's key (must
 // succeed and pass the assertion), with no key and with a wrong key (both must be refused). That catches an
 // endpoint that answers anyone, without code written for each product.

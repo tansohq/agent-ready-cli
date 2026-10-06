@@ -1,20 +1,20 @@
 ---
 name: agent-ready
-description: "Audit whether an AI agent can find, sign up for, get a key to, use and pay for a product without a person, using the agent-ready CLI. Reads public pages only and writes one fix prompt per gap. Use when the developer asks if agents can sign up for or use their product, asks about agent readiness, agent onboarding, llms.txt or agent signup, or wants to re-check after a fix. Also use when they ask to run agent-ready verify: this skill says how to start it safely."
+description: "Audit whether an AI agent can find, sign up for, get a key to, use and pay for a product without a person, using the agent-ready CLI. Reads public pages only and writes one fix prompt per gap. Use when the developer asks if agents can sign up for or use their product, asks about agent readiness, agent onboarding, llms.txt or agent signup, or wants to re-check after a fix. Also use when they ask to run agent-ready test: this skill says how to start it safely."
 ---
 
-# agent-ready audit
+# agent-ready check
 
-`npx @tansohq/agent-ready audit <url>` reads a product's public pages with GET requests, shows seven steps (Discover, Understand, Sign up, Access, Use, Pay, Manage) and writes a fix prompt for each gap. It submits nothing, creates no account and costs nothing (it writes only `agent-ready.yml` and a run folder), so you may run it whenever the developer asks about their product.
+`npx @tansohq/agent-ready check <url>` reads a product's public pages with GET requests, shows seven steps (Discover, Understand, Sign up, Access, Use, Pay, Manage) and writes a fix prompt for each gap. It submits nothing, creates no account and costs nothing (it writes only `agent-ready.yml` and a run folder), so you may run it whenever the developer asks about their product.
 
-## If the developer asks for verify
+## If the developer asks for a test (verify)
 
-Do not run the audit in its place, and do not run `verify` from this skill. Explain in one or two sentences that verify runs a real agent that creates an account on the product and spends model money, then point to the `agent-ready-verify` skill: in Claude Code the developer starts it by typing `/agent-ready-verify`. You may run the free `npx @tansohq/agent-ready verify --check --json` first and show the plan.
+Do not run the audit in its place, and do not run `test` from this skill. Explain in one or two sentences that verify runs a real agent that creates an account on the product and spends model money, then point to the `agent-ready-verify` skill: in Claude Code the developer starts it by typing `/agent-ready-verify`. You may run the free `npx @tansohq/agent-ready test --check --json` first and show the plan.
 
 ## Run it
 
 ```bash
-npx @tansohq/agent-ready audit <url> --json --yes
+npx @tansohq/agent-ready check <url> --json --yes
 ```
 
 - Needs Node 20.9 or later. The first `npx` run downloads the package.
@@ -50,4 +50,4 @@ Only when the developer asks: read the prompt file in `files.prompts`, make the 
 - Pages behind a login, and pages that render only with JavaScript.
 - Docs on another domain. It stays on the product's registrable domain.
 - More than 36 requests' worth of pages per run (well-known paths plus at most 14 followed links).
-- Whether signup actually works. That needs `agent-ready verify`, which runs a real agent, creates a real account and costs model use.
+- Whether signup actually works. That needs `agent-ready test`, which runs a real agent, creates a real account and costs model use.
