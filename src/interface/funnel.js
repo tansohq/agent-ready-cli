@@ -1,4 +1,5 @@
 import { STAGES, PILLAR } from "../schema/stages.js";
+import { AGENTID_NEEDS } from "./onboarding.js";
 
 // The seven-step answer for one public check: how far an agent can get, where it stops, and what to build.
 // Rule-based over the interface document only. Public evidence can show a path is documented; only a live
@@ -87,6 +88,8 @@ function signup(doc) {
   const self = patterns.find((p) => SIGNUP_PATTERNS.has(p.id));
   const existing = patterns.find((p) => p.id === "existing_account");
   const refs = (p) => (p?.evidence || []).map((e) => e.obs);
+  // The pattern's reason already names AgentID, what the agent needs, and whether the owner is shared.
+  if (self?.provider === "AgentID") return step("signup", "agent_can", self.reason, refs(self));
   if (self && self.needs.length) return step("signup", "agent_can", `The docs describe an agent signing up on its own (${self.name}). It needs: ${self.needs.join(", ")}.`, refs(self));
   // "Agent is the customer" has no person step, and its boundary text says so ("None documented. ..."), which does
   // not read after "A person steps in".
@@ -106,6 +109,8 @@ function access(doc, signupStep) {
   const refs = [...(auth.requirement?.basedOn || []), ...(auth.agentCanUnderstandSetup?.basedOn || []), ...(auth.mentions || []).flatMap((m) => (m.evidence || []).map((e) => e.obs))];
   if (requirement === "none") return step("access", "agent_can", "The documented actions need no key.", refs);
   if (signupStep.state === "handoff") return step("access", "handoff", "The agent uses the key a person gives it.", [...refs, ...signupStep.basedOn]);
+  const self = (doc.onboarding?.patterns || []).find((p) => SIGNUP_PATTERNS.has(p.id));
+  if (signupStep.state === "agent_can" && self?.provider === "AgentID") return step("access", "agent_can", "Signed in with AgentID, the agent holds its own account and gets its key or session from it, not from a person.", [...refs, ...signupStep.basedOn]);
   if (signupStep.state === "agent_can") return step("access", "agent_can", "The agent signup path hands back a key the agent can use.", [...refs, ...signupStep.basedOn]);
   if (methods.length || terms.length) return step("access", "needs_person", `The docs describe ${describeAuth(methods, terms)}, but the pages read do not show how an agent gets one.`, refs);
   return step("access", "not_checked", "The docs read do not say how an agent authenticates.", refs);
@@ -152,10 +157,21 @@ function manage() {
 
 const listNames = (names) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
+// A product can document AgentID beside another agent-first path that the funnel follows (Locus, AgentLine); the
+// AgentID path is then said too, so a reader of Sign up and Access sees both ways in.
+function withAgentId(doc, s, sentence) {
+  const patterns = doc.onboarding?.patterns || [];
+  const self = patterns.find((p) => SIGNUP_PATTERNS.has(p.id));
+  const agentId = patterns.find((p) => p.provider === "AgentID");
+  if (!agentId || agentId === self) return s;
+  return { ...s, reason: `${s.reason} ${sentence}`, basedOn: [...new Set([...s.basedOn, ...agentId.evidence.map((e) => e.obs)])] };
+}
+
 export function buildFunnel(doc) {
   const d = discover(doc);
-  const s = signup(doc);
-  const byId = { discover: d, understand: understand(doc), signup: s, access: access(doc, s), pay: pay(doc), use: use(doc), manage: manage() };
+  const s = withAgentId(doc, signup(doc), `The docs also describe the agent signing in with AgentID as itself, which needs ${AGENTID_NEEDS}.`);
+  const a = withAgentId(doc, access(doc, s), "Signed in with AgentID, the agent would hold its own account and get its key or session from it.");
+  const byId = { discover: d, understand: understand(doc), signup: s, access: a, pay: pay(doc), use: use(doc), manage: manage() };
   const steps = FUNNEL_ORDER.map((id) => byId[id]);
   const chosen = choosePath(doc);
   const paths = (doc.onboarding?.patterns || []).map((p) => ({ id: p.id, name: p.name, status: p.status, humanBoundary: p.humanBoundary || null, needs: p.needs, followed: p === chosen }));

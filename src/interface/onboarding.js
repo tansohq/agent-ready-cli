@@ -24,8 +24,8 @@ const SIGNALS = {
   apiFunding: /\badd (?:USD )?credit programmatically\b|\bno portal funding\b|\bfund (?:the|your) account[^.]{0,60}\b(?:API|programmatically)\b/i,
   // The agent authenticates as itself, with authority delegated by a person.
   // "Agent verified successfully" after a person approves it is a claim step, not this.
-  // Case-sensitive: an "agentId" field is an id, not AgentID.
-  agentIdentity: /\bAgentID\b|\b[Vv]erified agent identity\b|\b[Aa]gent identity (?:token|assertion|provider)\b|\b[Aa]gent[- ]verified (?:identity|registration|sign-?in)\b/,
+  // AgentID is matched on its own (AGENTID_SIGN_IN below): its name alone is not a way in.
+  agentIdentity: /\b[Vv]erified agent identity\b|\b[Aa]gent identity (?:token|assertion|provider)\b|\b[Aa]gent[- ]verified (?:identity|registration|sign-?in)\b/,
   // A person has to set access up before the agent starts.
   // A token a person creates counts the same way: GitHub's "personal access token", Vercel's "create a token on the
   // tokens page", Neon's "authenticate with a Neon API key".
@@ -71,6 +71,62 @@ export const PATTERNS = {
   },
 };
 
+// AgentID (issuer https://auth.agentid.com, from AgentMail) is an OpenID Connect provider for agents: the agent signs
+// in as itself from its AgentMail inbox, and no person approves each sign-in. A product accepts it when its own pages
+// say so, in one of these forms, each from a live page read 2026-10-06:
+// - a sign-in phrase: Archil's llms.txt "Archil accepts [AgentID](https://www.agentid.com) ... choose "Sign up with
+//   AgentID"", Keenable's agent-api-key.md "You signed in to Keenable with AgentID";
+// - "via AgentID", "the AgentID path" or "chooses AgentID" next to sign-in words: AgentLine's skill.md "Get one via
+//   **AgentID**", Locus's auth.md "An agent-owned account chooses AgentID";
+// - on an agent-facing page, AgentID declared as the identity provider or issuer: Locus's auth.md "Identity provider:
+//   AgentID OpenID Connect", "Issuer: `https://auth.agentid.com`";
+// - the product's own AgentID route: AgentLine's POST /v1/auth/agentid/start, Locus's /agent/identity/agentid.
+// The name alone is not this: AgentMail's homepage links "New product AgentID", launch posts name it, and
+// opencatalog's llms.txt "AgentID is configured" is a deployment status, not a way in. Integration tokens are not this
+// either: oauth_agentid, the discovery URL and @agentmail/agentid-better-auth are on Clerk's and AgentID's own docs,
+// which teach other apps to accept it. Case-sensitive: an "agentId" field is an id, not AgentID.
+const AGENTID_NAME = String.raw`(?:\*\*|\[|"|“)?AgentID\b`;
+const AGENTID_SIGN_IN = new RegExp(String.raw`\b(?:[Ss]ign(?:s|ed|ing)?[- ]?(?:in|up)|[Ll]og(?:s|ged|ging)?[- ]?in|[Aa]uthenticat(?:e|es|ed|ing)|[Cc]ontinue)(?:\s+(?:in)?to\s+[\w.-]+(?:\s+[\w.-]+)?)?\s+(?:with|using)\s+${AGENTID_NAME}|\b(?:[Aa]ccepts?|[Ss]upports?)\s+${AGENTID_NAME}`, "g");
+const AGENTID_VIA = new RegExp(String.raw`\bvia\s+${AGENTID_NAME}|\bAgentID(?:\*\*)? path\b|\bchoos(?:es?|ing)\s+${AGENTID_NAME}`, "g");
+const AGENTID_DECLARED = /\b[Ii]dentity provider:?\s*(?:\*\*)?AgentID\b|\b[Ii]ssuer:?\s*[`"]?https:\/\/auth\.agentid\.com\b/g;
+const AGENTID_ROUTE = /\/(?:auth|identity|oauth2?|sso|login)\/agentid\b/g;
+// "via AgentID" and the others need sign-in words nearby: "via AgentID" alone could be anything.
+const AGENTID_AUTH_WORDS = /\b(?:sign|log|auth\w*|account|key|token|credential|session|OIDC|OpenID)|_(?:KEY|TOKEN)\b/i;
+// Words next to the match that put the sign-in at another product: AgentMail's llms.txt has agents "sign in with
+// AgentID where apps accept it", AgentID's site says "Find apps that accept AgentID", "services where agents can sign
+// up and sign in with AgentID", "on the app's login page" and
+// "add Sign in with AgentID to your app", and Clerk's docs "allow your users to sign up and sign in". A first-party
+// sentence that goes on to "your application settings" is not one of these.
+const AGENTID_ELSEWHERE = /\b(?:apps?|sites?|services?|products?)\s+(?:that|which)\s+(?:accept|support)|\bwhere\s+(?:apps?|sites?|services?)\s+(?:accept|support)|\b(?:apps?|sites?|services?|products?)\s+where\s+agents\b|\b(?:any|other|every)\s+(?:apps?|sites?|services?|products?)\b|\bthe app['’]s\b|\b(?:to|into|in|add)\s+your\s+(?:app|application|site|product|login page|sign-in page)\b|\b(?:let|allow)s?\s+your users\b|\byour app['’]s\b/i;
+// A page written for developers adding AgentID to their own app, as AgentID's guides ("Add AgentID to Clerk",
+// "Accepting AgentID sign-ins") and its llms.txt ("Relying party (RP): an app that accepts AgentID sign-ins") are.
+// Wherever it is copied, it teaches integration; it does not say this product accepts AgentID.
+const AGENTID_INTEGRATION_PAGE = /\bAdd AgentID to\b|\b[Aa]ccepting AgentID sign-ins\b|\b[Rr]elying part(?:y|ies)\b/;
+// An auth vendor's integration note in the same sentence: "Descope accepts AgentID through its OIDC connector", "The
+// Better Auth plugin lets you sign in with AgentID". Only the sentence itself: Keenable's llms.txt line ends just
+// before a link to its "Integrations directory".
+const AGENTID_VENDOR = /\b(?:connection|connector|plugin|integration)s?\b/i;
+function sentenceAround(text, start, end) {
+  const from = Math.max(text.lastIndexOf(". ", start), text.lastIndexOf("\n", start), start - 200);
+  const stops = [text.indexOf(". ", end), text.indexOf("\n", end), end + 200].filter((i) => i >= end);
+  return text.slice(Math.max(0, from), Math.min(...stops));
+}
+
+// News that another company added AgentID: "Clerk now supports AgentID as a social connection", "Turso added Sign
+// in with AgentID". The word before the verb is the company; it counts only when it names the product being checked.
+const AGENTID_ANNOUNCED = /\b([A-Z][\w.-]*)\s+(?:now\s+)?(?:supports|accepts|added|adds|launched|launches|ships|shipped|announced)\b/g;
+const SELF_WORDS = new Set(["it", "we", "this", "our", "now", "also"]);
+
+// The issuer's own site documents AgentID for the apps that accept it; it is not one of them. Its "a verified agent
+// identity" describes what those apps receive, so neither AgentID nor the general agent-identity wording counts there.
+const AGENTID_ISSUER = "https://auth.agentid.com/";
+// Whether the product mentions the owner claims near its AgentID sign-in. owner_sub is left out: it comes with the
+// plain profile scope and is an opaque id, not a verified owner.
+const AGENTID_OWNER = /\bowner_(?:email|name|profile)\b/;
+const OWNER_WINDOW = 800;
+// What the agent needs, for the reasons here and in the funnel.
+export const AGENTID_NEEDS = "an AgentMail inbox (the inbox is its AgentID), an AgentMail key with app_connect on, and usually a browser (or the owner finishes the sign-in in the AgentMail console, or the agent's software registers its own signing key with AgentMail)";
+
 // Pages that exist to tell an agent how to start. A signal quoted from one of these is the product saying so.
 const AGENT_FACING = new Set(["onboarding", "auth", "llms_txt", "llms_full", "prm"]);
 const EVIDENCE_PER_SIGNAL = 3;
@@ -80,6 +136,36 @@ function quoteAround(text, index, width = 220) {
   let start = Math.max(0, index - 60);
   if (start > 0) start = Math.min(index, text.indexOf(" ", start) + 1 || index);
   return text.slice(start, start + width).replace(/\s+/g, " ").trim();
+}
+
+// Whether the words just before a match announce some other company's AgentID support.
+function announcedByOther(before, doc) {
+  const own = [...doc.target.host.toLowerCase().split("."), ...String(doc.product?.name?.value || "").toLowerCase().split(/\s+/)].filter(Boolean);
+  return [...before.matchAll(AGENTID_ANNOUNCED)].some((m) => !SELF_WORDS.has(m[1].toLowerCase()) && !own.includes(m[1].toLowerCase()));
+}
+
+// Every match on a page is tried, so one guarded mention does not hide a real one further down.
+function findAgentIdSignIn(doc, bodies) {
+  const out = [];
+  let ownerDocumented = false;
+  for (const obs of doc.observations) {
+    const body = bodies.get(obs.id);
+    if (!body || out.length >= EVIDENCE_PER_SIGNAL || !sameSite(obs.url, doc.target.url)) continue;
+    const text = body.html ? htmlToText(body.text) : body.text;
+    if (AGENTID_INTEGRATION_PAGE.test(text)) continue;
+    const agentFacing = AGENT_FACING.has(obs.role);
+    const matches = [
+      ...[...text.matchAll(AGENTID_SIGN_IN)],
+      ...[...text.matchAll(AGENTID_VIA)].filter((m) => AGENTID_AUTH_WORDS.test(text.slice(Math.max(0, m.index - 120), m.index + m[0].length + 120))),
+      ...(agentFacing ? [...text.matchAll(AGENTID_DECLARED)] : []),
+      ...[...text.matchAll(AGENTID_ROUTE)],
+    ].sort((x, y) => x.index - y.index);
+    const match = matches.find((m) => !AGENTID_ELSEWHERE.test(text.slice(Math.max(0, m.index - 60), m.index + m[0].length + 60)) && !announcedByOther(text.slice(Math.max(0, m.index - 60), m.index + m[0].length), doc) && !AGENTID_VENDOR.test(sentenceAround(text, m.index, m.index + m[0].length)));
+    if (!match) continue;
+    out.push({ obs: obs.id, quote: quoteAround(text, match.index), agentFacing });
+    if (AGENTID_OWNER.test(text.slice(Math.max(0, match.index - OWNER_WINDOW), match.index + OWNER_WINDOW))) ownerDocumented = true;
+  }
+  return { entries: out, ownerDocumented };
 }
 
 function findSignals(observations, bodies) {
@@ -154,6 +240,10 @@ function findApiHosts(doc, bodies) {
 export function detectOnboarding(doc, bodies) {
   const observations = doc.observations;
   const found = findSignals(observations, bodies);
+  const onIssuerSite = sameSite(AGENTID_ISSUER, doc.target.url);
+  const agentId = onIssuerSite ? { entries: [], ownerDocumented: false } : findAgentIdSignIn(doc, bodies);
+  found.agentIdSignIn = agentId.entries;
+  if (onIssuerSite) found.agentIdentity = [];
   // A signup call documented on a page written for agents is the product saying an agent can sign itself up, even
   // without the words "agent signup": Moltbook's skill.md says "register" and shows POST /api/v1/agents/register.
   found.bootstrap.push(...found.httpBootstrap.filter((e) => e.agentFacing && !found.bootstrap.some((b) => b.obs === e.obs)));
@@ -168,8 +258,16 @@ export function detectOnboarding(doc, bodies) {
 
   // Protected-resource metadata says how to authenticate, not that an agent can
   // authenticate as itself, so it supports this pattern but never establishes it.
-  if (has("agentIdentity")) {
-    const p = pattern("agent_identity", found, ["agentIdentity"], "The docs describe an agent authenticating with its own identity.");
+  if (has("agentIdSignIn") || has("agentIdentity")) {
+    const owner = agentId.ownerDocumented
+      ? "The docs mention AgentID's owner claims near the sign-in; the product gets the owner's name and email only if the agent's key has App: Share Owner or the owner approves the sign-in."
+      : "The pages read do not say whether the product asks who owns the agent; AgentID shares the owner's name and email only with a registered app that requests them, and only if the agent's key has App: Share Owner or the owner approves.";
+    const reason = has("agentIdSignIn") ? `The docs say an agent gets its own account by signing in with AgentID, an OpenID Connect provider for agents: it signs in as itself, usually with no person at each sign-in. It needs ${AGENTID_NEEDS}. ${owner}` : "The docs describe an agent authenticating with its own identity.";
+    const p = pattern("agent_identity", found, ["agentIdSignIn", "agentIdentity"], reason);
+    if (has("agentIdSignIn")) {
+      p.provider = "AgentID";
+      p.humanBoundary = "Outside the product, once: a person owns the AgentMail account behind the agent's inbox and turns on app_connect for its key. No one approves each sign-in, unless the product asks for the owner's details and the key lacks App: Share Owner.";
+    }
     const prm = observations.find((o) => o.ok && o.role === "prm");
     if (prm) p.evidence.push({ obs: prm.id, quote: "/.well-known/oauth-protected-resource" });
     patterns.push(p);

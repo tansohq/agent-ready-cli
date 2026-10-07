@@ -32,6 +32,8 @@ The defaults come from what the product's docs describe. If the developer knows 
 | `--abuse-cost` | `low` (reads and storage), `high` (compute, email, SMS, phone numbers) | What does one abusive free account cost? |
 | `--human-before` | `never`, `outbound` (before sending, publishing or charging), `always` (a verified person owns the account first) | Must a verified person exist before the agent acts? |
 
+`agent_identity` is detected when the product's own pages say agents sign in with AgentID ("Sign in with AgentID", "Acme accepts AgentID", "Identity provider: AgentID" on llms.txt or auth.md, or its own `/auth/agentid` route). It becomes the default answer only when no other agent-first path comes first; either way the Sign up reason names AgentID and what the agent needs, and the Access reason names AgentID. A bare mention of AgentID does not count.
+
 The fix prompts build toward the chosen model. Say which answers you used and that they were defaults, so the developer can correct them.
 
 ## Report it

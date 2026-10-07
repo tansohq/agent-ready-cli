@@ -22,6 +22,10 @@ const EXPECTED = {
   "moltbook.com": { primary: "limited_until_claimed" },
   "projects.dev": { primary: "existing_account", needs: ["cli"] },
   "x402.org": { primary: "pay_per_request" },
+  "archil.com": { primary: "agent_identity", also: ["existing_account"] },
+  "keenable.ai": { primary: "agent_identity", also: ["pay_per_request"] },
+  "paywithlocus.com": { primary: "try_then_claim", also: ["agent_identity", "pay_per_request"] },
+  "agentline.cloud": { primary: "try_then_claim", also: ["agent_identity"] },
 };
 
 const replayFrom = (responses) => async (url) => responses[url] || { ok: false, status: 0, url, contentType: "", headers: {}, text: "", error: "not recorded" };
@@ -153,4 +157,183 @@ test("an agent-is-the-customer signup reads as a sentence, with no person step",
   const signup = funnel.steps.find((s) => s.id === "signup");
   assert.match(signup.reason, /No person step is documented: the agent holds the account itself\.$/);
   assert.doesNotMatch(signup.reason, /steps in none/i);
+});
+
+// AgentID (auth.agentid.com) lets an agent sign in as itself from its AgentMail inbox. A product accepts it when its
+// own pages say an agent signs in or up with it there, as Archil's llms.txt does (recorded 2026-10-06).
+test("archil.com's \"Sign up with AgentID\" reads as agent identity through AgentID, cited from its llms.txt", async () => {
+  const { onboarding, observations } = await inspectFixture("archil.com");
+  const p = onboarding.patterns.find((x) => x.id === "agent_identity");
+  assert.equal(p.provider, "AgentID");
+  assert.equal(p.status, "documented");
+  assert.match(p.reason, /AgentID/);
+  assert.match(p.reason, /AgentMail inbox/);
+  const llms = observations.find((o) => o.role === "llms_txt" && o.ok);
+  assert.ok(p.evidence.some((e) => e.obs === llms.id && /Sign up with AgentID/.test(e.quote)), JSON.stringify(p.evidence));
+});
+
+// AgentID's own site teaches other apps to accept it, in every phrase a product would use. It is not one of them.
+test("www.agentid.com, the issuer's own site, is not read as accepting AgentID", async () => {
+  const { onboarding } = await inspectFixture("www.agentid.com");
+  assert.ok(!onboarding.patterns.some((p) => p.id === "agent_identity"), onboarding.patterns.map((p) => p.id).join(", "));
+});
+
+// AgentMail makes AgentID; its pages link "New product AgentID" and tell agents to "sign in with AgentID where apps
+// accept it". Neither says an agent signs in to AgentMail with it. Before this rule the bare name read as agent identity.
+test("agentmail.to's AgentID mentions are not read as accepting AgentID", async () => {
+  const { onboarding } = await inspectFixture("agentmail.to");
+  assert.ok(!onboarding.patterns.some((p) => p.id === "agent_identity"), onboarding.patterns.map((p) => p.id).join(", "));
+  assert.equal(onboarding.primary, "limited_until_claimed");
+});
+
+const AGENTID_DOCS = [
+  // Live wording, read 2026-10-06: Keenable's llms.txt and agent-api-key.md, AgentLine's skill.md, Locus's auth.md.
+  "- [Getting a key as an agent](https://app.keenable.ai/agent-api-key.md): for an agent that signed in with AgentID and holds a session but no key.",
+  "You are reading this because you signed in to Keenable with AgentID. That sign-in already made your account.",
+  "1. **`ACME_API_KEY`** — required. Missing? Get one via **AgentID** (if enabled) or OTP to any inbox you can read.",
+  "**AgentID path** (needs a waiting-page user-agent + AgentMail signing material):\n1. POST /v1/auth/agentid/start",
+  "The MCP OAuth authorization screen is public. An agent-owned account chooses AgentID and proves the same subject bound during signup.",
+  "## Native MCP path: Agent-owned signup\n\n- Identity provider: AgentID OpenID Connect\n- Issuer: `https://auth.agentid.com`",
+  "Agents: Sign-in with AgentID is on the login page.",
+  "Agents: Signup with **AgentID** at acme.dev/agents.",
+  "Agents can sign in with\n[AgentID](https://www.agentid.com) at acme.dev/login.",
+  "Sign in with AgentID, then open your application settings to create a key.",
+  "Our products that agents use most are search and fetch. Sign in with AgentID to get a key.",
+  "Agents: Sign in using AgentID at acme.dev/login.",
+  "It supports AgentID: an agent signs in at acme.dev/login and gets its own account.",
+  "- [Agent keys](https://acme.dev/agent-key.md): for an agent that signed in with AgentID and holds a session but no key. - [Integrations directory](https://acme.dev/integrations.md): LangChain and more.",
+  "Agents authenticate with AgentID; the first sign-in creates the account.",
+  "Acme now supports AgentID: agents sign in at acme.dev/login.",
+  "## Agents\n\nIf you are an AI agent, sign in with AgentID at acme.dev/login. Your account and API key are your own.",
+  "Acme accepts [AgentID](https://www.agentid.com), an OIDC identity provider for agents: choose \"Sign up with AgentID\" on the login page.",
+  "AI agents can click Continue with AgentID on the sign-in page to get their own Acme workspace.",
+  "Acme supports AgentID: an agent gets its own account from its AgentMail inbox, with no password.",
+];
+for (const quote of AGENTID_DOCS) {
+  test(`"${quote.slice(0, 40)}…" reads as an agent signing in with AgentID`, async () => {
+    const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+    const p = onboarding.patterns.find((x) => x.id === "agent_identity");
+    assert.ok(p, onboarding.patterns.map((x) => x.id).join(", "));
+    assert.equal(p.provider, "AgentID");
+    assert.equal(onboarding.primary, "agent_identity");
+    assert.ok(p.evidence.every((e) => /AgentID/.test(e.quote)));
+  });
+}
+
+test("a product that names AgentID's owner claims near the sign-in says so, with the condition", async () => {
+  const quote = "Agents sign in with AgentID. We request the owner_email scope and record the verified owner on the account.";
+  const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+  const p = onboarding.patterns.find((x) => x.id === "agent_identity");
+  assert.match(p.reason, /mention AgentID's owner claims near the sign-in/);
+  assert.match(p.reason, /only if the agent's key has App: Share Owner or the owner approves/);
+});
+
+// owner_sub comes with the plain profile scope and is an opaque id; owner claims far from the sign-in are about
+// something else on the page.
+for (const [label, quote] of [
+  ["owner_sub alone", "Agents sign in with AgentID. We key rate limits on owner_sub."],
+  ["owner_email far from the sign-in", `Agents sign in with AgentID.\n\n${"Unrelated text about plans and limits. ".repeat(30)}\n\nWebhook payloads carry owner_email for the workspace.`],
+]) {
+  test(`${label} does not read as the owner being shared`, async () => {
+    const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+    assert.match(onboarding.patterns.find((x) => x.id === "agent_identity").reason, /do not say whether the product asks who owns the agent/);
+  });
+}
+
+test("without owner claims in the docs, the reason says the owner is not stated", async () => {
+  const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(AGENTID_DOCS[0]) });
+  assert.match(onboarding.patterns.find((x) => x.id === "agent_identity").reason, /do not say whether the product asks who owns the agent/);
+});
+
+test("the audit's Sign up and Access steps name AgentID and what the agent needs", async () => {
+  const { funnel } = await inspect({ url: "https://acme.dev/", version: "test", runId: "r", fetchSource: llmsOnly(AGENTID_DOCS[1]) });
+  const steps = Object.fromEntries(funnel.steps.map((s) => [s.id, s]));
+  assert.equal(steps.signup.state, "agent_can");
+  assert.match(steps.signup.reason, /signing in with AgentID/);
+  assert.match(steps.signup.reason, /AgentMail inbox/);
+  assert.match(steps.signup.reason, /app_connect/);
+  assert.match(steps.signup.reason, /usually with no person at each sign-in/);
+  assert.match(steps.signup.reason, /usually a browser \(or the owner finishes the sign-in in the AgentMail console, or the agent's software registers its own signing key with AgentMail\)/);
+  assert.ok(steps.signup.basedOn.length);
+  assert.equal(steps.access.state, "agent_can");
+  assert.match(steps.access.reason, /AgentID/);
+  assert.equal(funnel.path.id, "agent_identity");
+});
+
+// Mentions that name AgentID without the product accepting it, and "agent ID" as a plain identifier.
+const NOT_AGENTID = [
+  "Blog: AgentMail launched AgentID today, a sign-in button for AI agents backed by an email inbox. Read the announcement.",
+  "New product AgentID → A sign-in button for AI agents. Start for free.",
+  "Your agent can create an inbox, read verification mail, reply, and sign in with AgentID where apps accept it.",
+  "Paste this prompt to your coding agent to add Sign in with AgentID to your app in minutes.",
+  "Authorize a sign-in that a browser already started at an app: when the app’s Sign in with AgentID page says it is waiting for your agent.",
+  "Each agent has an agent ID. Pass agent_id in the body, or GET /v1/agents/:agentId. The Agent ID field is shown in the dashboard.",
+  "Production: AgentID is configured and GitHub human sign-in has completed successfully.",
+  "Release notes arrive via AgentID's changelog feed every week.",
+  "Docs / Add AgentID to Clerk. Copy this to put a Sign in with AgentID button on the page: signIn.sso({ strategy: 'oauth_agentid' })",
+  "Find apps that accept AgentID. Explore services where agents can sign up and sign in with AgentID.",
+  // Third-party news and integration notes, as they would read on a changelog or partner page.
+  "Clerk now supports AgentID as a social connection.",
+  "Descope accepts AgentID through its OIDC connector.",
+  "Turso added Sign in with AgentID last week.",
+  "Your app's users can't Sign in with AgentID yet.",
+  "The Better Auth plugin lets you sign in with AgentID.",
+];
+for (const quote of NOT_AGENTID) {
+  test(`"${quote.slice(0, 40)}…" is not an agent signing in with AgentID`, async () => {
+    const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+    assert.deepEqual(onboarding.patterns.filter((p) => p.id === "agent_identity").map((p) => p.id), []);
+  });
+}
+
+test("a mention of AgentID at other apps does not hide the product's own sign-in further down the page", async () => {
+  const quote = "Your agent can sign in with AgentID where apps accept it.\n\n## Signing in to Acme\n\nIf you are an AI agent, sign in with AgentID at acme.dev/login and create an API key there.";
+  const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+  const p = onboarding.patterns.find((x) => x.id === "agent_identity");
+  assert.ok(p, onboarding.patterns.map((x) => x.id).join(", "));
+  assert.match(p.evidence[0].quote, /acme\.dev\/login/);
+});
+
+// Declaring AgentID as the identity provider counts only on a page written for agents; a general docs page that names
+// the issuer may be teaching integration.
+const docsOnly = (text) => {
+  const pages = { "https://acme.dev/": "<html><head><title>Acme</title></head><body>Acme</body></html>", "https://acme.dev/docs": text };
+  return async (url) => (pages[url] ? { ok: true, status: 200, url, contentType: "text/plain", headers: {}, text: pages[url] } : { ok: false, status: 404, url, contentType: "text/html", headers: {}, text: "" });
+};
+test("an issuer line on a general docs page is not agent sign-in; on llms.txt it is", async () => {
+  const quote = "Identity provider: AgentID OpenID Connect. Issuer: https://auth.agentid.com";
+  const docs = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: docsOnly(quote) });
+  assert.ok(!docs.onboarding.patterns.some((p) => p.provider === "AgentID"));
+  const llms = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource: llmsOnly(quote) });
+  assert.ok(llms.onboarding.patterns.some((p) => p.provider === "AgentID"));
+});
+
+test("the product's own AgentID route in its OpenAPI document counts", async () => {
+  const spec = JSON.stringify({ openapi: "3.1.0", info: { title: "Acme" }, paths: { "/v1/auth/agentid/start": { post: { summary: "Agentid Start", responses: { 200: { description: "ok" } } } } } });
+  const pages = { "https://acme.dev/": "<html><head><title>Acme</title></head><body>Acme</body></html>", "https://acme.dev/openapi.json": spec };
+  const fetchSource = async (url) => (pages[url] ? { ok: true, status: 200, url, contentType: url.endsWith(".json") ? "application/json" : "text/html", headers: {}, text: pages[url] } : { ok: false, status: 404, url, contentType: "text/html", headers: {}, text: "" });
+  const { onboarding } = await buildInterface({ url: "https://acme.dev/", version: "test", fetchSource });
+  assert.ok(onboarding.patterns.some((p) => p.provider === "AgentID"), onboarding.patterns.map((p) => p.id).join(", "));
+});
+
+// When another agent-first path leads (Locus, AgentLine: try first, claim later), Sign up and Access still say AgentID.
+for (const host of ["paywithlocus.com", "agentline.cloud"]) {
+  test(`${host}'s Sign up and Access name the AgentID path beside the primary one`, async () => {
+    const { funnel } = await inspect({ url: `https://${host}/`, version: "test", runId: "r", fetchSource: replayFrom(JSON.parse(gunzipSync(readFileSync(new URL(`../fixtures/onboarding/${host}.json.gz`, import.meta.url)))).responses) });
+    const steps = Object.fromEntries(funnel.steps.map((s) => [s.id, s]));
+    assert.equal(funnel.path.id, "try_then_claim");
+    assert.equal(steps.signup.state, "agent_can");
+    assert.match(steps.signup.reason, /Try first, claim later/);
+    assert.match(steps.signup.reason, /also describe the agent signing in with AgentID/);
+    assert.match(steps.access.reason, /Signed in with AgentID/);
+  });
+}
+
+test("keenable.ai's Sign up and Access pass through AgentID, not a person", async () => {
+  const { funnel } = await inspect({ url: "https://keenable.ai/", version: "test", runId: "r", fetchSource: replayFrom(JSON.parse(gunzipSync(readFileSync(new URL("../fixtures/onboarding/keenable.ai.json.gz", import.meta.url)))).responses) });
+  const steps = Object.fromEntries(funnel.steps.map((s) => [s.id, s]));
+  assert.equal(steps.signup.state, "agent_can");
+  assert.match(steps.signup.reason, /signing in with AgentID/);
+  assert.equal(steps.access.state, "agent_can");
+  assert.match(steps.access.reason, /AgentID/);
 });
