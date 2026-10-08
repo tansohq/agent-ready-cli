@@ -84,8 +84,9 @@ export function buildAudit({ doc, funnel, answers, task, runId, version }) {
   const pattern = patternInfo(answers.onboarding.value);
   const steps = funnel.steps.map((s) => ({ id: s.id, name: s.name, state: s.state, basis: basisFor(s, doc), reason: s.reason, basedOn: s.basedOn, ...(s.fix ? { fix: s.fix } : {}) }));
   // The chosen model is the target. A product whose docs only describe a person handing over a key passes Sign up
-  // as a handoff, but if the owner chose an agent-first model, that handoff is the gap to close.
-  const agentFirst = !["existing_account", "agent_identity"].includes(pattern.id);
+  // as a handoff, but if the owner chose an agent-first model, that handoff is the gap to close. Agent identity
+  // counts: the agent is meant to sign in as itself (for example with AgentID), not take a key from a person.
+  const agentFirst = pattern.id !== "existing_account";
   const gap = (s) => SEVERITY[s.state] || (agentFirst && s.id === "signup" && s.state === "handoff");
   const findings = steps
     .filter(gap)

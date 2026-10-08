@@ -7,7 +7,9 @@ export const HOLDER_OPTIONS = [
   { id: "try_then_claim", label: "Nobody yet; a person claims it later" },
   { id: "limited_until_claimed", label: "Nobody yet; limited until a person claims it" },
   { id: "agent_is_customer", label: "The agent holds it" },
-  { id: "agent_identity", label: "The agent, with an identity a person delegated" },
+  // One implementation is AgentID (https://www.agentid.com), AgentMail's OpenID Connect provider for agents: the
+  // agent signs in as itself with its AgentMail inbox. The Sign up fix prompt for this choice adds AgentID.
+  { id: "agent_identity", label: "The agent, with an identity a person delegated (for example Sign in with AgentID)" },
   { id: "existing_account", label: "A person sets it up and gives the agent a key" },
   { id: "pay_per_request", label: "No account; pay per request (HTTP 402)" },
 ];

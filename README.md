@@ -126,7 +126,7 @@ The three questions pick the onboarding model the prompts build toward: who hold
 
 `agent_identity` covers an agent signing in as itself. It is detected for [AgentID](https://www.agentid.com) when your own pages say agents sign in with it: a sign-in phrase ("Sign in with AgentID", "signed in to Acme with AgentID", "Sign-up with **AgentID**", "Acme accepts AgentID"); "via AgentID", "the AgentID path" or "chooses AgentID" next to sign-in words; "Identity provider: AgentID" or "Issuer: https://auth.agentid.com" on a page written for agents (llms.txt, auth.md, skill.md); or your own `/auth/agentid` route in your docs or OpenAPI document. The name alone does not count, and neither do sentences that place the sign-in at other products ("where apps accept it", "add Sign in with AgentID to your app"), integration guides ("Add AgentID to Clerk"), or AgentID's own site. When it is detected, the Sign up reason names AgentID, what the agent needs (an AgentMail inbox, an AgentMail key with `app_connect` on, and usually a browser), and whether your docs mention the owner claims. If another agent-first path is the one the report follows, Sign up and Access add a sentence about the AgentID path. `test` cannot complete an AgentID sign-in yet.
 
-Each run writes `.agent-ready/<host>/<runId>/` with `audit-report.json`, `interface.json`, `brief.md` (a one-page brief for security, legal and billing) and `prompts/` (one file per fix, plus `ALL.md`). Every prompt says why, what to build for the chosen model, the security rules, and acceptance tests the coding agent writes and makes pass.
+Each run writes `.agent-ready/<host>/<runId>/` with `audit-report.json`, `interface.json`, `brief.md` (a one-page brief for security, legal and billing) and `prompts/` (one file per fix, plus `ALL.md`). Every prompt says why, what to build for the chosen model, the security rules, and acceptance tests the coding agent writes and makes pass. With `onboarding: agent_identity`, the Sign up prompt adds Sign in with AgentID to the sign-in the repo already has (Clerk, Auth0, Supabase, Better Auth, Auth.js or its own OpenID Connect client), and names the device flow as the other option. With `try_then_claim`, `limited_until_claimed` or `agent_is_customer`, the Sign up prompt builds the signup endpoint and adds a short note that an existing OpenID Connect sign-in can accept AgentID instead, with what that costs. Choosing `agent_identity` also makes a Sign up that only describes a person handing over a key a gap to fix.
 
 | Flag | Does |
 | --- | --- |
@@ -156,6 +156,7 @@ To choose the call yourself, add the `verify_*` lines. A complete file:
 url: yourproduct.com
 task: Sign up as an agent, get an API key, and make one authenticated read call
 onboarding: try_then_claim      # try_then_claim | limited_until_claimed | agent_is_customer | agent_identity | existing_account | pay_per_request
+# agent_identity: the agent signs in as itself with an identity provider for agents, for example Sign in with AgentID (OpenID Connect).
 abuse_cost: low                 # low | high
 human_before: never             # never | outbound | always
 

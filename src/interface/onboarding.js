@@ -70,7 +70,7 @@ export const PATTERNS = {
   },
   agent_identity: {
     name: "Agent identity",
-    humanBoundary: "When a person delegates authority to the agent, before or outside the session.",
+    humanBoundary: "When the agent's owner sets up its identity or approves an app.",
   },
   existing_account: {
     name: "Person sets up access first",
@@ -210,6 +210,10 @@ const PERSON_WITHOUT_ACCOUNT = /\b(?:humans?|persons?|people|users?|developers?)
 // OAuth dynamic client registration registers a client app, not an account: fly.io's "client follows that to the
 // authorization server, registers itself dynamically, and runs the browser flow; the human approves in the browser".
 const CLIENT_REGISTRATION = /\bregisters?\s+itself\s+dynamically\b|\bdynamic(?:ally)?\s+(?:client\s+)?registration\b|\bclient\s+registration\b/i;
+// Access through the developer's Stripe account is a person setting access up once, not the agent signing itself up:
+// E2B's "the agent can use Stripe Projects to discover, provision, and authenticate a secure E2B sandbox ... without a
+// human touching a dashboard". Stripe Projects vouches with the developer's account and payment method.
+const BROKERED = /\b(?:use|uses|using|through|via|with)\s+Stripe Projects\b|\bstripe projects add\b/i;
 // "Use x402 without a human" is paying per request, which pay_per_request reports; it is not an account.
 const PAYMENT_WAY_IN = /\bx402\b|\bMPP\b/;
 // Selling with x402 is not paying with it: Stripe's "Charge for API requests, tool calls, and content via HTTP 402",
@@ -235,7 +239,7 @@ const EXAMPLE_PAGE = /\/(?:templates?|examples?|starters?)\//i;
 const OAUTH_REGISTRATION = /\/(?:oauth2?|connect|clients?|dcr)\/regist(?:er|ration)\b/i;
 // Whether a sentence holding a match is about something else; such a match is skipped and the next one tried.
 const SKIP = {
-  bootstrap: (sentence) => DOMAIN_ACTORS.test(sentence) || SIGNUP_OFF.test(sentence) || PERSON_WITHOUT_ACCOUNT.test(sentence) || PAYMENT_WAY_IN.test(sentence) || CLIENT_REGISTRATION.test(sentence),
+  bootstrap: (sentence) => DOMAIN_ACTORS.test(sentence) || SIGNUP_OFF.test(sentence) || PERSON_WITHOUT_ACCOUNT.test(sentence) || PAYMENT_WAY_IN.test(sentence) || CLIENT_REGISTRATION.test(sentence) || BROKERED.test(sentence),
   httpBootstrap: (sentence, ownDomain, match) => DOMAIN_ACTORS.test(sentence) || OAUTH_REGISTRATION.test(match),
   payPerRequest: (sentence, ownDomain) => DOMAIN_ACTORS.test(sentence) || SELLER.test(sentence) || PROTOCOL_DESCRIPTION.test(sentence) || paysElsewhere(sentence, ownDomain),
 };

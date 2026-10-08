@@ -48,6 +48,7 @@ export function writeConfig(path, { url, task, answers }) {
     `url: ${url}`,
     `task: ${task}`,
     `onboarding: ${answers.onboarding.value}      # try_then_claim | limited_until_claimed | agent_is_customer | agent_identity | existing_account | pay_per_request`,
+    "# agent_identity: the agent signs in as itself with an identity provider for agents, for example Sign in with AgentID (OpenID Connect).",
     `abuse_cost: ${answers.abuse_cost.value}      # low | high`,
     `human_before: ${answers.human_before.value}  # never | outbound | always`,
     "",

@@ -171,6 +171,7 @@ for (const [label, quote, expected] of [
   ["Browser Use: the product accepts x402", "Browser Use Cloud now accepts payment in USDC over the x402 protocol.", "pay_per_request"],
   ["Stripe: paying at another site", "Agents can now contribute directly to Acme Climate at [climate.acme.org](https://climate.acme.org) using [MPP](https://mpp.dev) or [x402](https://x402.org).", null],
   ["Stripe: describing the protocol", "x402 is the internet's payment standard for agentic payments at scale.", null],
+  ["E2B: access through Stripe Projects is the developer's account", "Now, the agent can use Stripe Projects to discover, provision, and authenticate a secure Acme sandbox, getting credentials in its environment so it can immediately start running code, without a human touching a dashboard.", null],
   ["paying on the product's own site", "Agents pay per request at api.acme.dev with x402.", "pay_per_request"],
 ]) {
   test(`${label}`, async () => {
