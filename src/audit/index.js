@@ -18,7 +18,7 @@ export function basisFor(step, doc) {
   if (step.id === "understand") return doc.pricing?.agentCanDetermineCost?.verdict === "yes" ? "observed" : "heuristic";
   if (step.id === "access") return doc.authentication?.methods?.length ? "observed" : "heuristic";
   if (step.id === "use") return doc.interfaces?.api?.machineReadableSpec?.verdict === "yes" ? "observed" : "heuristic";
-  if (step.id === "pay") return doc.pricing?.plans?.length ? "observed" : "heuristic";
+  if (step.id === "pay") return doc.pricing?.plans?.length && !doc.pricing?.agentPurchase ? "observed" : "heuristic";
   return "heuristic";
 }
 
@@ -99,7 +99,11 @@ export function buildAudit({ doc, funnel, answers, task, runId, version }) {
     product: productName(doc),
     generatedAt: new Date().toISOString(),
     task,
-    headline: `Your public pages show ${steps.filter((s) => PASSING.has(s.state)).length} of ${steps.length} steps working.`,
+    // The funnel's headline: documented and verified kept apart. verified counts steps a test proved; a funnel built
+    // from public pages alone, as check builds it, has none.
+    headline: funnel.headline,
+    documented: funnel.documented,
+    verified: funnel.verified,
     pagesRead: doc.observations.filter((o) => o.ok).length,
     steps,
     onboarding: {

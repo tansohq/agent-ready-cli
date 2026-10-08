@@ -23,7 +23,10 @@ test("a product with no agent signup stops at Sign up and says what to build", (
   const signup = f.steps.find((s) => s.id === "signup");
   assert.equal(signup.state, "needs_person");
   assert.match(signup.fix, /one API call/);
-  assert.match(f.headline, /gets through 2 of 7 steps\. It stops at Sign up\./);
+  assert.equal(f.headline, `Your public pages document ${f.documented} of 7 steps. None is verified yet: a test runs a real agent.`);
+  assert.equal(f.verified, 0);
+  assert.equal(f.passed, 2, "passed still counts the steps before the first stop");
+  assert.equal(f.stepsPassing, f.documented + f.verified);
 });
 
 test("try first, claim later counts as an agent signing up, and the funnel names the path", () => {
@@ -46,7 +49,7 @@ test("steps public evidence cannot prove are not checked, and never count as a s
   const f = buildFunnel(doc({ pricing: { agentCanDetermineCost: verdict("yes"), ambiguities: [], plans: [{ id: "free", amount: 0 }] }, onboarding: { patterns: [{ id: "agent_is_customer", name: "Agent is the customer", status: "documented", needs: [] }] } }));
   assert.equal(f.steps.find((s) => s.id === "manage").state, "not_checked");
   assert.equal(f.stopsAt, null);
-  assert.match(f.headline, /Pay needs a test to go further/);
+  assert.match(f.headline, /^Your public pages document \d of 7 steps\. None is verified yet/);
 });
 
 test("robots.txt that blocks AI agents stops the funnel at Discover", () => {
@@ -75,10 +78,41 @@ test("a passed live test proves its step; a blocked one overrides public evidenc
   assert.ok(use.fix);
   assert.equal(f.steps.find((s) => s.id === "discover").state, base.steps[0].state);
   assert.equal(f.stopsAt, "access", "public evidence still decides steps no live test covered");
+  assert.equal(f.verified, 1);
+  assert.equal(f.stepsPassing, f.documented + 1, "stepsPassing counts the verified step too");
+  assert.equal(f.documented, f.steps.filter((s) => ["agent_can", "handoff"].includes(s.state)).length);
+  assert.equal(f.headline, `1 of 7 steps verified by a test. Your public pages document ${f.documented} more. Use failed a test.`);
 });
 
 test("Use counts API operations, not OpenAPI tag groups", () => {
   const caps = [{ name: "Emails", evidence: [{ obs: "obs_1" }], operationDetails: [{}, {}, {}] }, { name: "Domains", evidence: [{ obs: "obs_1" }], operationDetails: [{}, {}] }];
   const f = buildFunnel(doc({ capabilities: caps }));
   assert.match(f.steps.find((s) => s.id === "use").reason, /^5 API operations/);
+});
+
+test("the headline counts every passing step and names a step a live test failed", async () => {
+  const { applyLiveTests } = await import("../src/interface/funnel.js");
+  const base = buildFunnel(doc({ onboarding: { patterns: [{ id: "try_then_claim", name: "Try first, claim later", status: "documented", humanBoundary: "After the first job.", needs: [], evidence: [{ obs: "obs_1" }] }] } }));
+  const f = applyLiveTests(base, [{ id: "run_u", kind: "usability", step: "understand", outcome: "blocked", summary: "No price for Pro.", completedAt: "2026-09-02T00:00:00Z" }]);
+  const passing = f.steps.filter((s) => ["agent_did", "agent_can", "handoff"].includes(s.state)).length;
+  assert.equal(f.headline, `0 of 7 steps verified by a test. Your public pages document ${passing} more. Understand failed a test.`);
+  assert.equal(f.stepsPassing, passing);
+  assert.ok(passing > f.passed, "a stop early in the order no longer hides the steps after it");
+});
+
+test("the funnel and the schema walk the seven steps in one order, Use before Pay", async () => {
+  const { FUNNEL_ORDER } = await import("../src/interface/funnel.js");
+  const { STAGES } = await import("../src/schema/stages.js");
+  assert.deepEqual(FUNNEL_ORDER, STAGES);
+  assert.deepEqual(STAGES, ["discover", "understand", "signup", "access", "use", "pay", "manage"]);
+  assert.deepEqual(buildFunnel(doc()).steps.map((s) => s.id), STAGES);
+});
+
+test("stepsPassing is the count the headline says; passed stays the steps before the first stop", async () => {
+  const { applyLiveTests } = await import("../src/interface/funnel.js");
+  const f = applyLiveTests(buildFunnel(doc()), [{ id: "r", kind: "usability", step: "understand", outcome: "blocked", summary: "x", completedAt: "2026-09-02T00:00:00Z" }]);
+  assert.equal(f.stepsPassing, f.documented + f.verified);
+  assert.ok(f.headline.startsWith(`${f.verified} of 7 steps verified by a test. Your public pages document ${f.documented} more.`));
+  assert.equal(f.passed, 1);
+  assert.ok(f.stepsPassing > f.passed);
 });

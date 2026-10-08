@@ -2,6 +2,7 @@ import { collectSources } from "./sources.js";
 import { extractAll } from "./extract.js";
 import { evaluateInterfaces, evaluateAuthentication, evaluatePricing, evaluateMachineAccess, deriveCapabilities, collectUnknowns } from "./evaluate.js";
 import { detectOnboarding } from "./onboarding.js";
+import { detectAgentPurchase } from "./purchase.js";
 import { SCHEMA_ID, validateInterface } from "./schema.js";
 import { runId as newRunId } from "../schema/ids.js";
 
@@ -38,6 +39,7 @@ export async function buildInterface({ url, version, log = () => {}, runId = new
     limits: LIMITS,
   };
   doc.onboarding = detectOnboarding(doc, bodies);
+  doc.pricing.agentPurchase = detectAgentPurchase(doc, bodies);
   doc.unknowns = [...collectUnknowns(doc), ...x.parseFailures];
   doc.finishedAt = new Date().toISOString();
   return validateInterface(doc);

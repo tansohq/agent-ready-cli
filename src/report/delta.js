@@ -1,4 +1,18 @@
-import { RANK } from "../schema/stages.js";
+import { RANK, STAGES, STOPS_AT, atLeast } from "../schema/stages.js";
+
+// The earlier run's headline, counted again from its stage states in the current STAGES order. A history line
+// written before Use moved ahead of Pay carries a count made in the old order, and comparing it with a count in
+// the new order showed a regression ("4/7, was 5/7") on runs where no stage changed. Same rule as merge.js.
+function headlineInOrder(states) {
+  const applicable = STAGES.filter((id) => (states[id] ?? "NOT_TESTED") !== "NOT_APPLICABLE");
+  let cleared = 0;
+  for (const id of applicable) {
+    const state = states[id] ?? "NOT_TESTED";
+    if (atLeast(state, "AGENT_CAPABLE")) { cleared++; continue; }
+    return { cleared, of: applicable.length, stalledAt: state === "NOT_TESTED" ? "unsure" : STOPS_AT[id] };
+  }
+  return { cleared, of: applicable.length, stalledAt: null };
+}
 
 // previous = history lines for this target, oldest first.
 export function computeDelta(report, previous) {
@@ -41,7 +55,7 @@ export function computeDelta(report, previous) {
     stages,
     findings: { new: newIds, fixed, regressed, persisted },
     fixedDetails: fixed.map((id) => comparable.findingText?.[id] ? { id, text: comparable.findingText[id], stage: comparable.findingStage?.[id] } : { id }),
-    headline: { from: comparable.headline, to: { cleared: report.headline.cleared, of: report.headline.of, stalledAt: report.headline.stalledAt } },
+    headline: { from: comparable.stages ? headlineInOrder(comparable.stages) : comparable.headline, to: { cleared: report.headline.cleared, of: report.headline.of, stalledAt: report.headline.stalledAt } },
     maturity: { from: comparable.maturity, to: report.maturity.level },
     humanInterventions: { from: comparable.humanInterventions ?? null, to: report.headline.humanInterventions },
   };

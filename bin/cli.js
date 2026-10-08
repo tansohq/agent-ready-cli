@@ -228,10 +228,13 @@ Examples:
       inferred = await inferVerifyCall({ url, version: pkg.version, cwd: process.cwd() });
       if (live) process.stderr.write("\r\x1b[2K");
       if (inferred.error) fail(opts, 2, "verify_call_invalid", `${CONFIG_FILE} has no verify_call, and none could be taken from the product's docs: ${inferred.error}.`, addCallHint);
+      const from = `(from ${inferred.specUrl}${inferred.specVia ? `, linked from ${inferred.specVia}` : ""})`;
+      const willCheck = `Will check with ${inferred.call} on ${inferred.apiHost} (${inferred.headerName}) ${from}.`;
+      const offSiteNote = inferred.offSite ? `\n  This API host is on a different site than ${host}; the key the agent gets is sent there.` : "";
       let accepted = Boolean(opts.yes);
       if (!accepted && process.stdin.isTTY && !opts.json) {
         const rl = createInterface({ input: process.stdin, output: process.stderr });
-        const reply = await rl.question(`\n  Will check with ${inferred.call} (${inferred.headerName}). Use it? [Y/n] `).catch((err) => {
+        const reply = await rl.question(`\n  ${willCheck}${offSiteNote}\n  Use it? [Y/n] `).catch((err) => {
           if (err.code === "ABORT_ERR") return "n";
           throw err;
         });
@@ -241,7 +244,7 @@ Examples:
           process.exit(130);
         }
         accepted = true;
-      } else if (!opts.json) console.error(`\n  Will check with ${inferred.call} (${inferred.headerName}).`);
+      } else if (!opts.json) console.error(`\n  ${willCheck}${offSiteNote}`);
       if (accepted) {
         writeVerifyCall(join(process.cwd(), CONFIG_FILE), inferred);
         if (!opts.json) console.error(`  ${style.dim(`Saved to ${CONFIG_FILE}.`)}`);
@@ -249,7 +252,7 @@ Examples:
     }
     const spec = parseVerifySpec(inferred ? { ...config, verify_call: inferred.call, verify_header: inferred.header } : config);
     if (spec.error) fail(opts, 2, "verify_call_invalid", spec.error, addCallHint);
-    const checker = { inferred: Boolean(inferred), inferredFrom: inferred ? inferred.specUrl : null };
+    const checker = { inferred: Boolean(inferred), inferredFrom: inferred ? inferred.specUrl : null, ...(inferred?.specVia ? { inferredVia: inferred.specVia } : {}), ...(inferred ? { apiHost: inferred.apiHost, apiHostOffSite: inferred.offSite } : {}) };
     if (opts.check) {
       const claude = opts.executor === "claude-print" ? claudeStatus() : { ok: true, detail: `executor ${opts.executor}` };
       const inbox = process.env.AGENTMAIL_API_KEY ? "AgentMail: a fresh inbox for this run, deleted after" : opts.inbox ? `you relay mail from ${opts.inbox} into work/inbox/` : "none (set AGENTMAIL_API_KEY if the product emails a code or link)";

@@ -163,7 +163,9 @@ describe("delta", () => {
     assert.ok(r2.delta.findings.fixed.length >= 2);
     assert.equal(r2.delta.findings.new.length, 0);
     assert.equal(r2.delta.headline.from.cleared, 4);
-    assert.equal(r2.delta.headline.to.cleared, 5);
+    // Use comes before Pay, and Use was not tested, so clearing Pay does not move the stall point.
+    assert.equal(r2.delta.headline.to.cleared, 4);
+    assert.equal(r2.headline.stalledStage, "use");
   });
   it("scan-only follow-up never marks audit findings fixed", () => {
     const r1 = merge({ ...base, scan: scanFixture(), audit: auditFixture() });
@@ -197,5 +199,29 @@ describe("what a probe failure is allowed to decide", () => {
       { id: "robots_ai", status: "fail", detail: "robots.txt blocks AI agents: GPTBot, ClaudeBot, CCBot" },
     ]) });
     assert.equal(byId(report, "discover").state, "BLOCKED");
+  });
+});
+
+describe("a history line written in the old step order", () => {
+  it("compares with the earlier run's stages counted in the current order, so an unchanged run is not a regression", () => {
+    const audit = auditFixture();
+    audit.areas.purchasing = { score: 9, today: "POST /subscriptions with saved PM", blocks: [], build: "none", effort: "S" };
+    audit.hard_blockers = [];
+    const crash = crashFixture();
+    crash.flows.find((f) => f.id === "pay").result = "PASS";
+    crash.findings = [];
+    const before = merge({ ...base, audit, crash });
+    // 0.4.2 counted Pay before Use, so the same states gave 5 cleared, not 4.
+    const oldLine = { ...historyLine(before), headline: { cleared: 5, of: 7, stalledAt: "pay" } };
+    const after = merge({ ...base, runId: "r2", audit, crash, previous: [oldLine] });
+    assert.equal(after.delta.stages.filter((s) => s.direction !== "same").length, 0);
+    assert.deepEqual(after.delta.headline.from, { cleared: after.headline.cleared, of: after.headline.of, stalledAt: after.headline.stalledAt });
+  });
+  it("still validates a saved report that lists pay before use", () => {
+    const report = merge({ ...base, audit: auditFixture(), crash: crashFixture() });
+    const old = { ...report, stages: [...report.stages].sort((a, b) => (a.id === "pay" && b.id === "use" ? -1 : a.id === "use" && b.id === "pay" ? 1 : 0)) };
+    assert.equal(old.stages.findIndex((s) => s.id === "pay") < old.stages.findIndex((s) => s.id === "use"), true);
+    assert.doesNotThrow(() => validateReport(old));
+    assert.throws(() => validateReport({ ...report, stages: [...report.stages.slice(0, 6), report.stages[0]] }), /each of/);
   });
 });

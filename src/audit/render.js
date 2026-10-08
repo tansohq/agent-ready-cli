@@ -8,7 +8,7 @@ export function makeStyle(enabled) {
 
 const PASSING = new Set(["agent_did", "agent_can", "handoff"]);
 const FAILING = new Set(["needs_person", "blocked"]);
-const TAG = { observed: "from your files", heuristic: "from page text", not_checked: "needs agent run" };
+const TAG = { observed: "from your files", heuristic: "from page text", not_checked: "needs a test run" };
 
 function mark(state, style) {
   if (PASSING.has(state)) return style.green("✓");
@@ -38,10 +38,12 @@ export function renderVerdict(audit, style) {
   const unchecked = audit.steps.filter((s) => s.state === "not_checked").length;
   const parts = [];
   if (audit.findings.length) parts.push(`${plural(audit.findings.length, "needs a fix", "need a fix")}.`);
-  if (unchecked) parts.push(`${plural(unchecked, "needs", "need")} a real agent run to check.`);
+  if (unchecked) parts.push(`${plural(unchecked, "needs", "need")} a test run.`);
   const handoffs = audit.steps.filter((s) => s.state === "handoff").length;
-  if (handoffs) parts.unshift(`${plural(handoffs, "works", "work")} because a person hands the agent access.`);
-  return [`  ${style.bold(audit.headline)}`, ...wrap(parts.join(" "), 76).map((line) => `  ${line}`)];
+  if (handoffs) parts.unshift(`${plural(handoffs, "works", "work")} because a person steps in once.`);
+  // One sentence of the headline a line: "Your public pages document 5 of 7 steps." then "None is verified yet: …".
+  const headline = audit.headline.split(/(?<=\.) /).flatMap((sentence) => wrap(sentence, 76));
+  return [...headline.map((line) => `  ${style.bold(line)}`), ...wrap(parts.join(" "), 76).map((line) => `  ${line}`)];
 }
 
 // One row per step: mark, name, reason, and how the state was found, on the first line.

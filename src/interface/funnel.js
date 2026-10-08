@@ -9,9 +9,8 @@ export const FUNNEL_SCHEMA = "agent-ready/funnel@1";
 // agent_did: a live test proved the step. Only a live test sets it.
 export const STEP_STATES = ["agent_did", "agent_can", "handoff", "needs_person", "blocked", "not_checked"];
 const PASSING = new Set(["agent_did", "agent_can", "handoff"]);
-// An agent uses the product before it pays: in every passing live run the agent made real calls on a free key,
-// and payment came at a limit or when a person claimed the account.
-export const FUNNEL_ORDER = ["discover", "understand", "signup", "access", "use", "pay", "manage"];
+// Kept under this name for callers; the order itself lives in schema/stages.js.
+export const FUNNEL_ORDER = STAGES;
 
 export const STEP_NAME = {
   discover: "Discover",
@@ -130,6 +129,18 @@ function pay(doc) {
   const paidPlans = plans.filter((p) => typeof p.amount === "number" && p.amount > 0);
   const paidText = observed.filter((o) => (o.prices || []).some((price) => /[1-9]/.test(price)));
   const refs = [...plans.flatMap((p) => (p.evidence || []).map((e) => e.obs)), ...paidText.flatMap((o) => (o.evidence || []).map((e) => e.obs))];
+  // A purchase the product's own pages document (src/interface/purchase.js). One approval by a person, then the agent
+  // buys on its own, is a handoff: a person steps in at a documented point and the agent carries on. It is not
+  // agent_can, which would say no person is needed, and not needs_person, which would say a person checks out each time.
+  const purchase = doc.pricing?.agentPurchase;
+  const purchaseRefs = (purchase?.evidence || []).map((e) => e.obs);
+  const perRequestCall = purchase?.rule === "pay_per_request_own_api";
+  if (purchase?.approval === "once") {
+    const how = perRequestCall ? `pays over x402 or MPP${purchase.call ? ` (${purchase.call})` : ""}` : purchase.call ? `buys through ${purchase.call}` : "buys through the API";
+    return step("pay", "handoff", `A person sets payment up once (an approval link, a spending cap, a saved card or a delegation), then the agent ${how}, with no browser checkout. The docs say so; a test shows whether it works.`, purchaseRefs);
+  }
+  if (purchase?.rule === "agent_buys_through_api") return step("pay", "agent_can", `The docs describe an agent buying through the API${purchase.call ? ` (${purchase.call})` : ""}, and no person approving first. A test shows whether it works.`, purchaseRefs);
+  if (perRequestCall) return step("pay", "agent_can", `The docs show a paid call over x402 or MPP on the product's own API${purchase.call ? ` (${purchase.call})` : ""}, with no browser checkout. The agent needs a funded wallet; a test shows whether the payment goes through.`, purchaseRefs);
   // Pay-per-request wording is easy to misread: a billing product describing its own
   // customers' metering reads the same as an agent paying. Only a live test settles it.
   if (perRequest) return step("pay", "not_checked", "The docs mention paying per request. A test with a real agent shows whether it can actually pay.", (perRequest.evidence || []).map((e) => e.obs));
@@ -154,7 +165,7 @@ function use(doc) {
 }
 
 function manage() {
-  return step("manage", "not_checked", "Changing a plan or a limit can only be proven by a live agent.");
+  return step("manage", "not_checked", "Changing a plan or a limit can only be proven by a test run.");
 }
 
 const listNames = (names) => (names.length < 2 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
@@ -182,17 +193,25 @@ export function buildFunnel(doc) {
 
 // Read in order, as an agent would walk them: how far it gets before the first step
 // that does not pass, and whether that step is a real stop or only unproven.
+// The headline keeps two counts apart: steps the public pages document (agent_can, handoff) and steps a test with a
+// real agent verified (agent_did). Reading pages is not running a task, so a check alone never says a step works.
 function summarize(steps) {
   const firstOpen = steps.findIndex((x) => !PASSING.has(x.state));
   const passed = firstOpen === -1 ? steps.length : firstOpen;
-  const next = firstOpen === -1 ? null : steps[firstOpen];
   const stop = steps.find((x) => x.state === "blocked" || x.state === "needs_person") || null;
-  const headline = !next
-    ? `An agent gets through all ${steps.length} steps.`
-    : next.state === "not_checked"
-      ? `An agent gets through ${passed} of ${steps.length} steps. ${next.name} needs a test to go further.`
-      : `An agent gets through ${passed} of ${steps.length} steps. It stops at ${next.name}.`;
-  return { headline, passed, of: steps.length, stopsAt: stop?.id || null, fixes: steps.filter((x) => x.fix).map((x) => ({ step: x.id, name: x.name, fix: x.fix })) };
+  const verified = steps.filter((x) => x.state === "agent_did").length;
+  const documented = steps.filter((x) => x.state === "agent_can" || x.state === "handoff").length;
+  // stepsPassing (from #78) is every passing step, the total the headline gives: documented plus verified.
+  return { headline: headlineFor(steps, documented, verified), passed, stepsPassing: documented + verified, documented, verified, of: steps.length, stopsAt: stop?.id || null, fixes: steps.filter((x) => x.fix).map((x) => ({ step: x.id, name: x.name, fix: x.fix })) };
+}
+
+function headlineFor(steps, documented, verified) {
+  if (!steps.some((x) => x.live)) return `Your public pages document ${documented} of ${steps.length} steps. None is verified yet: a test runs a real agent.`;
+  const failed = steps.filter((x) => x.live && x.state === "blocked").map((x) => x.name);
+  const parts = [`${verified} of ${steps.length} steps verified by a test.`];
+  if (documented) parts.push(`Your public pages document ${documented} more.`);
+  if (failed.length) parts.push(`${listNames(failed)} failed a test.`);
+  return parts.join(" ");
 }
 
 // A live test outranks anything read from public pages: the latest passed or blocked

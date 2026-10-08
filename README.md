@@ -85,8 +85,9 @@ npx @tansohq/agent-ready check yourproduct.com
   agent-ready check · neon.com
   Read 23 public pages. GET only, nothing submitted.
 
-  Your public pages show 5 of 7 steps working.
-  1 needs a fix. 1 needs a real agent run to check.
+  Your public pages document 5 of 7 steps.
+  None is verified yet: a test runs a real agent.
+  1 needs a fix. 1 needs a test run.
 
   ✓ Discover      The site is open to agents and has an index   from your files
                   written for them (/llms.txt with 277 links).
@@ -103,8 +104,8 @@ npx @tansohq/agent-ready check yourproduct.com
   ✗ Pay           Paid plans are published, but nothing         from page text
                   documents a way for an agent to buy one, so
                   a person has to check out.
-  · Manage        Changing a plan or a limit can only be        needs agent run
-                  proven by a live agent.
+  · Manage        Changing a plan or a limit can only be        needs a test run
+                  proven by a test run.
 
   Onboarding  Try first, claim later (documented · defaults saved to agent-ready.yml)
 
@@ -119,7 +120,7 @@ npx @tansohq/agent-ready check yourproduct.com
           prompts/ for the fixes · brief.md for security, legal, billing
 ```
 
-The right-hand column says how each step was found: `from your files` (a structured file or an HTTP status), `from page text` (matched in prose, so it can be wrong), or `needs agent run` (public pages cannot show it). An audit never reports a step as verified; only a real agent run can.
+The right-hand column says how each step was found: `from your files` (a structured file or an HTTP status), `from page text` (matched in prose, so it can be wrong), or `needs a test run` (public pages cannot show it). An audit never reports a step as verified; only a real agent run can.
 
 The three questions pick the onboarding model the prompts build toward: who holds the account when an agent first uses it, what one abusive free account costs, and whether a verified person must exist before the agent acts. Defaults come from what your docs describe. Answers are saved to `agent-ready.yml`; commit it and later runs reuse it.
 
@@ -147,7 +148,7 @@ npx @tansohq/agent-ready test
 
 `test` has a real agent (your local Claude Code) try the task in `agent-ready.yml` on your product, then checks the key it got with one authenticated call. `check` writes the file.
 
-With no `verify_call` in it, `test` takes the call from your OpenAPI document: it reuses the latest `interface.json` that `check` wrote in `.agent-ready/<host>/` (or reads your public pages the same way `check` does), then picks a GET that needs a key and has no required parameters, preferring paths like `/me`, `/account`, `/user` and `/whoami`, on the document's first server. The header comes from the security scheme: a bearer scheme gives `Authorization: Bearer {key}`, and an API key in a header gives `<its name>: {key}`. In a terminal it asks `Will check with GET <url> (<header>). Use it? [Y/n]` and saves the call to `agent-ready.yml` on yes; `--yes` accepts and saves it; without either, the call is used for that run and not saved. `--json` marks it with `checker.inferred: true` and `checker.inferredFrom` (the OpenAPI document's URL) in both the plan and the result. When no operation fits (no OpenAPI document in JSON, or no GET with a bearer or header key and no required parameters), `test` exits `2` and asks for a `verify_call`.
+With no `verify_call` in it, `test` takes the call from your OpenAPI document: it reuses the latest `interface.json` that `check` wrote in `.agent-ready/<host>/` (or reads your public pages the same way `check` does), then picks a GET that needs a key and has no required parameters, preferring paths like `/me`, `/account`, `/user` and `/whoami`, on the document's first server. When your site's own OpenAPI document has no such GET (or there is none), it tries the OpenAPI documents in JSON that your `llms.txt`, `auth.md` and other agent files link to on the same registrable domain (`app.` and `api.` hosts included), and picks one whose call reads the caller's account when it can. The header comes from the security scheme: a bearer scheme gives `Authorization: Bearer {key}`, and an API key in a header gives `<its name>: {key}`. An API key in `Authorization` takes the prefix the document gives for it (the scheme's description or `x-` fields, or an Authorization header parameter: "Prefix your key with 'Token '", "Token <key>"), for example `Authorization: Token {key}`. When no prefix is documented, or two different ones, that call is skipped for the next one. The plan names the call's API host and the document it came from. When the host is on a different site than your product, it says so: the key the agent gets is sent there. `checker.apiHost` and `checker.apiHostOffSite` carry the same in `--json`. In a terminal it asks `Will check with GET <url> on <host> (<header>) (from <document>). Use it? [Y/n]` and saves the call to `agent-ready.yml` on yes; `--yes` accepts and saves it; without either, the call is used for that run and not saved. `--json` marks it with `checker.inferred: true` and `checker.inferredFrom` (the OpenAPI document's URL) in both the plan and the result, plus `checker.inferredVia` (the page that linked it) when the document came from a link; the plan output says the same. When no operation fits (no OpenAPI document in JSON, or no GET with a bearer or header key and no required parameters), `test` exits `2` and asks for a `verify_call`.
 
 To choose the call yourself, add the `verify_*` lines. A complete file:
 
@@ -242,4 +243,4 @@ npx @tansohq/agent-ready test --json --yes     # creates a real account on the p
 
 `agent-ready execute --task <id>` reruns one of the built-in example tasks against its public product with a real agent; `agent-ready execute --help` lists them. For your own product, use `test`.
 
-Source: https://github.com/tansohq/agent-ready-cli. Issues and questions go there. The hosted dashboard at app.tansohq.com runs the same checks and tests with nothing to install. Hosted test runs are free for the first 5 each calendar month in a workspace a person owns, then $5.00 per completed run.
+Source: https://github.com/tansohq/agent-ready-cli. Issues and questions go there. The hosted dashboard at app.tansohq.com runs the same checks and tests with nothing to install. Hosted test runs are free for the first 5 each calendar month in a workspace a person owns, then $5.00 per run.

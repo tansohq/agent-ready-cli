@@ -38,7 +38,7 @@ The fix prompts build toward the chosen model. Say which answers you used and th
 
 ## Report it
 
-1. Lead with `headline` ("Your public pages show N of 7 steps working.").
+1. Lead with `headline` ("Your public pages document N of 7 steps. None is verified yet: a test runs a real agent."). `documented` and `verified` hold the two counts; a check never verifies, so `verified` is 0.
 2. List each finding: its step, its title and its reason.
 3. Never call a step verified or confirmed: an audit only reads pages. Say how each step was found (`basis`): `observed` comes from a structured file or an HTTP status, `heuristic` from matching page text (it can be wrong), and `not_checked` means public pages cannot show it. Only a real agent run verifies a step.
 4. Give the paths in `files`: `files.prompts` (one fix prompt per finding), `files.brief` (a one-page brief for security, legal and billing) and `files.config`.

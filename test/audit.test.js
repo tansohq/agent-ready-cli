@@ -140,8 +140,11 @@ describe("audit: brief and config", () => {
     const funnel = buildFunnel(d);
     const audit = buildAudit({ doc: d, funnel, answers: answersFor(funnel), task: "t", runId: "r", version: "test" });
     const working = audit.steps.filter((s) => ["agent_can", "handoff", "agent_did"].includes(s.state)).length;
-    const [headline] = renderVerdict(audit, makeStyle(false));
-    assert.equal(headline, `  Your public pages show ${working} of 7 steps working.`);
+    const [first, second] = renderVerdict(audit, makeStyle(false));
+    assert.equal(first, `  Your public pages document ${working} of 7 steps.`);
+    assert.equal(second, "  None is verified yet: a test runs a real agent.");
+    assert.equal(audit.documented, working);
+    assert.equal(audit.verified, 0);
     assert.ok(working > 0, "a missing llms.txt does not zero the later steps");
   });
 
@@ -150,7 +153,12 @@ describe("audit: brief and config", () => {
     const funnel = buildFunnel(d);
     const audit = buildAudit({ doc: d, funnel, answers: answersFor(funnel), task: "t", runId: "r", version: "test" });
     const lines = renderVerdict(audit, makeStyle(false));
-    assert.match(lines[1], /^  2 work because a person hands the agent access\./);
+    assert.match(lines[2], /^  2 work because a person steps in once\./);
+    // Unchecked steps are named the way the step tag names them.
+    const unchecked = audit.steps.filter((x) => x.state === "not_checked").length;
+    assert.ok(unchecked > 0);
+    assert.match(lines.slice(1).map((l) => l.trim()).join(" "), new RegExp(`${unchecked} needs? a test run\\.`));
+    assert.doesNotMatch(lines.join(" "), /agent run/);
     for (const line of lines) assert.ok([...line].length <= 80, line);
   });
 
@@ -201,8 +209,8 @@ describe("audit: brief and config", () => {
     const d = doc({ machineAccess: { aiCrawlersAllowed: verdict("yes"), hasAgentReadableIndex: verdict("no") } });
     const funnel = buildFunnel(d);
     const audit = buildAudit({ doc: d, funnel, answers: answersFor(funnel), task: "t", runId: "r", version: "test" });
-    const [line] = renderVerdict(audit, makeStyle(false));
-    assert.equal(line.trim(), audit.headline);
+    const [first, second] = renderVerdict(audit, makeStyle(false));
+    assert.equal(`${first.trim()} ${second.trim()}`, audit.headline);
     assert.ok(renderBrief(audit, d).includes(`**${audit.headline}**`));
   });
 

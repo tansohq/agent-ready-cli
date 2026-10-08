@@ -120,7 +120,7 @@ const AGENTID_VENDOR = /\b(?:connection|connector|plugin|integration)s?\b/i;
 // Looks for the sentence's ends only within 200 characters of the match: a 2 MB page on one line would otherwise be
 // scanned end to end for every match. A line break followed by a lowercase letter is hard-wrapped prose, not the end of
 // a sentence: fly.io's auth.md wraps "registers itself\ndynamically".
-function sentenceAround(text, start, end) {
+export function sentenceAround(text, start, end) {
   const lo = Math.max(0, start - 200);
   const near = text.slice(lo, Math.min(text.length, end + 200));
   const wrapped = (i) => /[a-z]/.test(near[i + 1] || "");
@@ -158,11 +158,11 @@ const OWNER_WINDOW = 800;
 export const AGENTID_NEEDS = "an AgentMail inbox (the inbox is its AgentID), an AgentMail key with app_connect on, and usually a browser (or the owner finishes the sign-in in the AgentMail console, or the agent's software registers its own signing key with AgentMail)";
 
 // Pages that exist to tell an agent how to start. A signal quoted from one of these is the product saying so.
-const AGENT_FACING = new Set(["onboarding", "auth", "llms_txt", "llms_full", "prm"]);
+export const AGENT_FACING = new Set(["onboarding", "auth", "llms_txt", "llms_full", "prm"]);
 const EVIDENCE_PER_SIGNAL = 3;
 
 // Starts at a word boundary a little before the match, so the quote reads as text.
-function quoteAround(text, index, width = 220) {
+export function quoteAround(text, index, width = 220) {
   let start = Math.max(0, index - 60);
   if (start > 0) start = Math.min(index, text.indexOf(" ", start) + 1 || index);
   return text.slice(start, start + width).replace(/\s+/g, " ").trim();
@@ -201,7 +201,7 @@ function findAgentIdSignIn(doc, bodies) {
 // A sentence about the product's own customers is the product's domain, not an agent starting with this product:
 // a billing product's "your customers can check out without an account", "No signup required for your end users".
 // Not "your client": that is the reader's HTTP or MCP client (Cosmic, fly.io, Exa).
-const DOMAIN_ACTORS = /\byour (?:customers?|users?|end[- ]users?|buyers?|subscribers?)\b|\b(?:end[- ]users?|shoppers?)\b|\bguest checkout\b/i;
+export const DOMAIN_ACTORS = /\byour (?:customers?|users?|end[- ]users?|buyers?|subscribers?)\b|\b(?:end[- ]users?|shoppers?)\b|\bguest checkout\b/i;
 // Agent signup said to be off: Browser Use's "Agent signup is off. Create an API key in Cloud".
 const SIGNUP_OFF = /\bagent[- ]?sign[- ]?ups? (?:is|are|was|has been) (?:currently |now |temporarily )?(?:off|disabled|closed|paused|unavailable|not (?:available|enabled|open|supported))\b/i;
 // A person without an account is a person signing up: fly.io's "`fly auth signup` is the same flow for a human without
@@ -215,15 +215,15 @@ const PAYMENT_WAY_IN = /\bx402\b|\bMPP\b/;
 // Selling with x402 is not paying with it: Stripe's "Charge for API requests, tool calls, and content via HTTP 402",
 // "accept x402 payments", "monetize your API". "Browser Use Cloud now accepts payment in USDC over the x402 protocol"
 // is the product being paid, so the third person "accepts" stays.
-const SELLER = /\bcharg(?:e|ing) (?:for|your)\b|\bmonetiz\w*|\baccept(?:ing)? (?:x402|payments?|stablecoins?)\b|\bget(?:ting)? paid\b|\bpaywall\w*/i;
+export const SELLER = /\bcharg(?:e|ing) (?:for|your)\b|\bmonetiz\w*|\baccept(?:ing)? (?:x402|payments?|stablecoins?)\b|\bget(?:ting)? paid\b|\bpaywall\w*/i;
 // Describing the protocol is not this product taking it: Stripe's "x402 is the internet's payment standard for agentic
 // payments at scale".
-const PROTOCOL_DESCRIPTION = /\b(?:x402|MPP)\b[^.]{0,40}?\bis (?:a|an|the)\b[^.]{0,80}?\b(?:standard|protocol)\b/i;
+export const PROTOCOL_DESCRIPTION = /\b(?:x402|MPP)\b[^.]{0,40}?\bis (?:a|an|the)\b[^.]{0,80}?\b(?:standard|protocol)\b/i;
 // Paying at another site is not paying this product: Stripe's "Agents can now contribute directly to Stripe Climate at
 // [climate.stripe.dev](…) using MPP or x402". The protocols' own sites are not other products.
 const AT_HOST = /\b(?:at|on)\s+\[?(?:https?:\/\/)?((?:[a-z0-9-]+\.)+[a-z]{2,})\b/gi;
 const PROTOCOL_SITES = new Set(["x402.org", "mpp.dev"]);
-function paysElsewhere(sentence, ownDomain) {
+export function paysElsewhere(sentence, ownDomain) {
   return [...sentence.matchAll(AT_HOST)].some((m) => {
     const domain = registrableDomain(m[1].toLowerCase());
     return domain !== ownDomain && !PROTOCOL_SITES.has(domain);

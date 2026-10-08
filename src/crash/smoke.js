@@ -175,7 +175,7 @@ export async function smoke({ url, outDir, runId, version, task = "", log = () =
   }
   log(flows.at(-1));
 
-  for (const id of ["access", "pay", "use", "manage"]) flows.push({ id, result: "SKIP", human_interventions: 0, quote: "Not attempted in smoke mode." });
+  for (const id of ["access", "use", "pay", "manage"]) flows.push({ id, result: "SKIP", human_interventions: 0, quote: "Not attempted in smoke mode." });
 
   let recording = null;
   if (video) {

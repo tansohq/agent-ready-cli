@@ -1,4 +1,7 @@
-export const STAGES = ["discover", "understand", "signup", "access", "pay", "use", "manage"];
+// The one order of the seven steps, everywhere: the funnel, the dashboard, the CLI's check, the older report,
+// the docs and auth.md. An agent uses a product before it pays: in every passing live run the agent made real
+// calls on a free key, and payment came at a limit or when a person claimed the account.
+export const STAGES = ["discover", "understand", "signup", "access", "use", "pay", "manage"];
 
 export const PILLAR = {
   discover: "web",

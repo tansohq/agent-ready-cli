@@ -97,11 +97,15 @@ export function validateReport(doc) {
   const problems = [];
   if (doc?.schema !== "agent-ready/report@1") problems.push("schema must be agent-ready/report@1");
   if (!Array.isArray(doc?.stages) || doc.stages.length !== STAGES.length) problems.push(`stages must have ${STAGES.length} entries`);
-  else
+  else {
+    // Reports are written in STAGES order. One written before Use moved ahead of Pay lists pay first; it is read as
+    // long as it has each of the seven stages exactly once.
+    const ids = doc.stages.map((s) => s.id);
+    if (STAGES.some((id) => !ids.includes(id)) || new Set(ids).size !== STAGES.length) problems.push(`stages must list each of ${STAGES.join(", ")} once`);
     doc.stages.forEach((s, i) => {
-      if (s.id !== STAGES[i]) problems.push(`stages[${i}].id must be ${STAGES[i]}`);
       if (!STATES.includes(s.state)) problems.push(`stages[${i}].state invalid: ${s.state}`);
     });
+  }
   if (!doc?.headline || !Number.isInteger(doc.headline.cleared)) problems.push("headline.cleared missing");
   if (problems.length) throw new ValidationError("report.json", problems);
   return doc;

@@ -52,7 +52,11 @@ export function renderPlan(plan, style) {
   row(null, "Limits", `${plan.agent.maxTurns} turns, $${plan.agent.maxBudgetUsd} of model use (checked after each turn, so a run can end slightly above it)`);
   row(null, "Agent saves", `${plan.agent.saves.join(" and ")} in work/CREDENTIAL.env (the harness asks for them; the task need not)`);
   row(null, "Checker calls", plan.checker.call);
-  if (plan.checker.inferred) row(null, "", `inferred from ${plan.checker.inferredFrom}; set verify_call in agent-ready.yml to choose another`);
+  if (plan.checker.inferred) {
+    row(null, "API host", `${plan.checker.apiHost} (from ${plan.checker.inferredFrom}${plan.checker.inferredVia ? `, linked from ${plan.checker.inferredVia}` : ""})`);
+    if (plan.checker.apiHostOffSite) row(null, "", `This API host is on a different site than ${plan.target.host}; the key the agent gets is sent there.`);
+    row(null, "", "inferred; set verify_call in agent-ready.yml to choose another");
+  }
   for (const c of plan.checker.calls) row(null, "", c);
   out.push("");
   if (plan.ready) out.push(`  ${style.bold(style.green("READY"))}  Nothing ran. Start the agent with ${style.bold("npx @tansohq/agent-ready test")}`);
