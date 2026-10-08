@@ -64,7 +64,7 @@ export function renderSummary(audit, paths, style, relative, savedTo) {
   const where = savedTo ? ` · ${savedTo}` : "";
   const out = ["", `  ${style.bold("Onboarding")}  ${audit.onboarding.chosen.name} ${style.dim(`(${audit.onboarding.chosen.source}${where})`)}`];
   if (!audit.findings.length) {
-    out.push("", `  ${style.bold("No fixes from public pages.")} A real agent run is the next check.`);
+    out.push("", `  ${style.bold("No fixes from public pages.")}`);
   } else {
     out.push("", `  ${style.bold(plural(audit.findings.length, "fix", "fixes"))}  ${style.dim(audit.findings.length === 1 ? "a prompt for your coding agent" : "one prompt each, for your coding agent")}`);
     for (const f of audit.findings) {

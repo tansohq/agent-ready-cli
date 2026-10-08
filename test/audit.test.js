@@ -284,6 +284,18 @@ describe("audit: command", () => {
     assert.ok(readdirSync(out).includes("interface.json"));
   });
 
+  it("ends with the commands that run a real agent, without waiting for an answer when there is no terminal", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "audit-cli-"));
+    const r = runCli(["check", site, "--yes", "--out", join(cwd, "run")], cwd);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /Next {2}When the fixes are in, a test shows whether a real agent can do the steps\./);
+    assert.match(r.stderr, /npx @tansohq\/agent-ready test --check {3}see the plan \(free, runs nothing\)/);
+    assert.match(r.stderr, /npx @tansohq\/agent-ready test {11}run it: your Claude Code signs up for real/);
+    assert.doesNotMatch(r.stderr, /Pick 1-3/);
+    const json = runCli(["check", site, "--yes", "--json", "--out", join(cwd, "json")], cwd);
+    assert.doesNotMatch(json.stdout + json.stderr, /npx @tansohq\/agent-ready test/, "--json prints only the report");
+  });
+
   it("--fail-on medium exits 1 when a medium fix exists, and a bad level exits 2", () => {
     const cwd = mkdtempSync(join(tmpdir(), "audit-cli-"));
     assert.equal(runCli(["audit", site, "--yes", "--json", "--fail-on", "medium", "--out", join(cwd, "a")], cwd).status, 1);

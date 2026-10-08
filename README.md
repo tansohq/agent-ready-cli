@@ -24,7 +24,7 @@ npx @tansohq/agent-ready test --check            # free: checks your setup and s
 npx @tansohq/agent-ready test                    # asks before it starts
 ```
 
-`check` writes `agent-ready.yml`. `test` takes the call that checks the agent's key from your OpenAPI document when it can, and otherwise asks you to add a `verify_call` (see [Test with a real agent](#test-with-a-real-agent)). To skip `npx`, install once with `npm i -g @tansohq/agent-ready` and run `agent-ready check …`.
+`check` writes `agent-ready.yml`. In a terminal it then asks what next: run a test now, see the plan first (free), or quit with the commands; with `--yes`, `--json` or no terminal it prints the commands instead and waits for nothing. `test` takes the call that checks the agent's key from your OpenAPI document when it can, and otherwise asks you to add a `verify_call` (see [Test with a real agent](#test-with-a-real-agent)). To skip `npx`, install once with `npm i -g @tansohq/agent-ready` and run `agent-ready check …`.
 
 ### With your coding agent
 

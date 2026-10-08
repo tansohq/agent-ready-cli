@@ -166,7 +166,47 @@ Examples:
     if (opts.json) process.stdout.write(JSON.stringify({ ...audit, files }, null, 2) + "\n");
     else for (const line of renderSummary(audit, paths, style, rel, savedTo)) say(line);
     if (opts.failOn && audit.findings.some((f) => FAIL_ON[opts.failOn].includes(f.severity))) process.exitCode = 1;
+    if (!opts.json) await offerTest({ audit, style, say, interactive: Boolean(process.stdin.isTTY && process.stderr.isTTY) && !opts.yes, hasConfig: existsSync(configPath) });
   });
+
+// check reads public pages; test has a real agent do the steps. A person at a terminal picks what to do next and
+// can start it here. --yes, pipes and agents get the same choices as commands, and nothing waits for an answer.
+const TEST_CMD = "npx @tansohq/agent-ready test";
+async function offerTest({ audit, style, say, interactive, hasConfig }) {
+  const lead = audit.findings.length ? "When the fixes are in, a test shows whether a real agent can do the steps." : "This check read your docs. A test has a real agent actually do the steps.";
+  if (!interactive || !hasConfig) {
+    say(`  ${style.bold("Next")}  ${lead}`);
+    say(`        ${style.bold(`${TEST_CMD} --check`)}   see the plan (free, runs nothing)`);
+    say(`        ${style.bold(TEST_CMD)}           run it: your Claude Code signs up for real`);
+    say("");
+    return;
+  }
+  say(`  ${lead}`);
+  say("");
+  say(`  ${style.bold("What next?")}`);
+  say(`    ${style.bold("1")}  Run a test now    your Claude Code signs up on ${audit.target.host} for real (asks first)`);
+  say(`    ${style.bold("2")}  See the plan      what a test would do, free, runs nothing`);
+  say(`    ${style.bold("3")}  Later             show the commands and quit`);
+  say("");
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  const reply = await rl.question(`  Pick 1-3 [${audit.findings.length ? 3 : 1}]: `).catch((err) => {
+    if (err.code === "ABORT_ERR") return "3";
+    throw err;
+  });
+  rl.close();
+  const pick = reply.trim() || (audit.findings.length ? "3" : "1");
+  const self = fileURLToPath(import.meta.url);
+  if (pick === "1" || pick === "2") {
+    say("");
+    const run = spawnSync(process.execPath, [self, "test", ...(pick === "2" ? ["--check"] : [])], { stdio: "inherit" });
+    if (run.status) process.exitCode = run.status;
+    return;
+  }
+  say("");
+  say(`  ${style.bold(`${TEST_CMD} --check`)}   see the plan (free, runs nothing)`);
+  say(`  ${style.bold(TEST_CMD)}           run it: your Claude Code signs up for real`);
+  say("");
+}
 
 function parseBudget(value) {
   const usd = Number(value);

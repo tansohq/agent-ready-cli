@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.6 (2026-10-08)
+
+- `check` ends with a next step instead of "A real agent run is the next check." In a terminal it asks "What next?": 1 runs a test now (test still shows its plan and asks before the agent starts), 2 shows the plan for free, 3 prints the commands and quits. The default is 1 when there is nothing to fix and 3 when there are fixes. With `--yes`, `--json`, or no terminal on stdin or stderr, it prints the two commands under "Next" and never waits for an answer. `brief.md` names the same commands. `--json` output is unchanged.
+
 ## 0.4.5 (2026-10-08)
 
 - `check` reads an agent getting access through Stripe Projects ("use Stripe Projects to … provision", `stripe projects add`) as a person setting access up first, since the developer's Stripe account vouches for the agent. Across the 41 hosts checked on 2026-10-08, e2b.dev changes from Agent is the customer to Person sets up access first (Sign up and Access are handoffs); no other host changes.
