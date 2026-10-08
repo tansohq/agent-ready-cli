@@ -26,6 +26,11 @@ const EXPECTED = {
   "keenable.ai": { primary: "agent_identity", also: ["pay_per_request"] },
   "paywithlocus.com": { primary: "try_then_claim", also: ["agent_identity", "pay_per_request"] },
   "agentline.cloud": { primary: "try_then_claim", also: ["agent_identity"] },
+  // A usage-billing product for AI-agent companies: its agents and customers are records it bills, and a person gets
+  // the key from the dashboard. test/billing-vocabulary.test.js checks the funnel it produces.
+  "marginfront.com": { primary: "existing_account" },
+  // POST https://www.firecrawl.dev/agent/auth exchanges an agent platform's ID-JAG for an API key, over HTTP.
+  "firecrawl.dev": { primary: "agent_is_customer", also: ["existing_account"] },
 };
 
 const replayFrom = (responses) => async (url) => responses[url] || { ok: false, status: 0, url, contentType: "", headers: {}, text: "", error: "not recorded" };

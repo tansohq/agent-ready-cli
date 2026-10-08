@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { getDomain, parse } from "tldts";
 import { get, isHtml, joinUrl } from "../probe/http.js";
 
 // Discover and fetch a product's first-party public surfaces. Every fetch becomes one observation with provenance:
@@ -51,14 +52,49 @@ function sha(text) {
   return createHash("sha256").update(text).digest("hex").slice(0, 16);
 }
 
-// Not the full Public Suffix List, just the two-label suffixes common enough that "last two labels" would make
-// every .co.uk site the same site as every other.
-const TWO_LABEL_SUFFIXES = new Set(["co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.jp", "co.nz", "com.br", "co.in", "com.cn", "co.za", "com.mx", "com.sg"]);
-
+// By the Public Suffix List bundled with tldts (no network), including its private section: platform suffixes
+// such as vercel.app, github.io and s3.amazonaws.com, where each tenant is its own site. An IP address, a bare
+// suffix or a single-label name has no registrable domain and stands for itself.
+const PSL = { allowPrivateDomains: true };
 export function registrableDomain(host) {
-  const parts = host.toLowerCase().replace(/^www\./, "").split(".");
-  return parts.slice(TWO_LABEL_SUFFIXES.has(parts.slice(-2).join(".")) ? -3 : -2).join(".");
+  const name = host.toLowerCase();
+  return getDomain(name, PSL) || name;
 }
+
+// Whether a host on another site looks like the product's own: its registrable name, without the suffix, is the
+// product's (acme.io for acme.dev, foo.netlify.app for foo.vercel.app) or the product's plus docs, api, dev, app or hq
+// (acmedocs.com, foo-docs.vercel.app). Conservative on purpose: docs a product links on nextjs.org, docker.com or
+// raw.githubusercontent.com are someone else's, and counting them put a note on most products.
+const OWN_SUFFIXES = /^-?(?:docs|api|dev|app|hq)$/;
+export function productHost(host, base) {
+  const own = parse(new URL(base).hostname, PSL).domainWithoutSuffix;
+  const other = parse(host.toLowerCase(), PSL).domainWithoutSuffix;
+  if (!own || !other) return false;
+  return other === own || (other.startsWith(own) && OWN_SUFFIXES.test(other.slice(own.length)));
+}
+
+// The host is itself a public suffix (co.uk, gov.au, x.ck under *.ck): no name under it belongs to one owner.
+export function isPublicSuffix(host) {
+  const parsed = parse(host.toLowerCase(), PSL);
+  return !parsed.isIp && parsed.domain === null;
+}
+
+// The name is a public suffix by the ICANN section alone (co.uk, gov.au), not counting platform suffixes
+// such as workers.dev, whose subdomains are deployments a product's own tool can print.
+export function isIcannSuffix(host) {
+  const parsed = parse(host.toLowerCase());
+  return !parsed.isIp && parsed.domain === null;
+}
+
+// The host sits under a platform suffix (tenant.vercel.app, user.github.io): its neighbours on that suffix are
+// other customers of the platform, so nothing but the host itself belongs to the product.
+export function onSharedHost(host) {
+  return parse(host.toLowerCase(), PSL).isPrivate === true;
+}
+
+// The product's own hosts an agent is sent to most often, besides the one it was given. The CLI's network (verify)
+// and a hosted run's reach (usability) use the same list.
+export const PRODUCT_SUBDOMAINS = ["www", "api", "docs", "app", "auth", "console", "dashboard", "developers"];
 
 export function sameSite(url, base) {
   try {
@@ -89,7 +125,8 @@ export function extractLinks(html, pageUrl) {
 
 export function extractMarkdownLinks(text, pageUrl) {
   const out = [];
-  const re = /\[([^\]]*)\]\(([^)\s]+)\)/g;
+  // Bounded and on one line, so an unclosed "[" does not rescan the rest of the file.
+  const re = /\[([^\[\]\n]{0,500})\]\(([^)\s]+)\)/g;
   let m;
   while ((m = re.exec(text))) {
     try {
@@ -198,8 +235,12 @@ export async function collectSources(base, { log = () => {}, fetchSource = get }
     }
   }
 
-  // Follow links from what we already have: homepage, llms.txt, docs, sitemap. Same registrable domain only.
+  // Follow links from what we already have: homepage, llms.txt, docs, sitemap. Same registrable domain only. Hosts
+  // skipped for being another site are counted when the link would otherwise have been followed (a docs or auth page)
+  // and the host looks like the product's own (productHost), so a report can say what it did not read: a
+  // platform-hosted product's docs on a sibling tenant (foo.vercel.app linking foo-docs.vercel.app) are another site.
   const candidates = [];
+  const skippedHosts = new Set();
   for (const obs of [...observations]) {
     const body = bodies.get(obs.id);
     if (!body) continue;
@@ -208,9 +249,13 @@ export async function collectSources(base, { log = () => {}, fetchSource = get }
     else if (body.html) links = extractLinks(body.text, obs.finalUrl);
     else if (obs.role === "llms_txt" || obs.role === "llms_full") links = extractMarkdownLinks(body.text, obs.finalUrl);
     for (const link of links) {
-      if (!sameSite(link.href, base)) continue;
       const role = roleForLink(link);
       if (!role) continue;
+      if (!sameSite(link.href, base)) {
+        const host = new URL(link.href).host;
+        if (productHost(host, base)) skippedHosts.add(host);
+        continue;
+      }
       candidates.push({ role, url: link.href, discoveredVia: { kind: "link", from: obs.id, text: link.text } });
     }
   }
@@ -230,5 +275,5 @@ export async function collectSources(base, { log = () => {}, fetchSource = get }
     perRole[c.role] = (perRole[c.role] || 0) + 1;
   }
 
-  return { observations, bodies };
+  return { observations, bodies, otherHostsSkipped: skippedHosts.size };
 }

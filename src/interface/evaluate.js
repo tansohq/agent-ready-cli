@@ -1,3 +1,5 @@
+import { htmlToText, registrableDomain, sameSite } from "./sources.js";
+
 // Evaluations are judgements about what an agent could do with the observed facts. Each one names the rule it applied
 // and the observations it rests on, so a reader can disagree with the rule without doubting the evidence.
 // Verdicts: yes | partial | no | unknown. unknown means we did not observe enough to say, never "probably not".
@@ -24,12 +26,72 @@ function referencedByReadingSurfaces(observations, bodies, pathname) {
   return hits;
 }
 
+// An API documented in prose, with no OpenAPI file: a page on the product's own site presents the product's API base
+// URL ("## REST API … Base URL: https://api.marginfront.com/v1") and lists at least two endpoints on it ("GET
+// /v1/verify", "curl -X POST https://api.marginfront.com/v1/usage/record").
+// - The base URL is on the product's own registrable domain: a page that configures another company's API ("base URL
+//   https://api.openai.com/v1") does not count.
+// - It reads as the product's API: an api. host, an /api or /v1 path, or "API" or "REST" just before it. A tutorial's
+//   app ("the base URL is https://my-app.acme.app", "your base URL") or a config variable ("BASE_URL: https://acme.dev")
+//   is not.
+// - Endpoints count when host-less or on the product's domain, once each: POST /emails, POST /v1/emails and POST
+//   https://api.acme.dev/v1/emails are one endpoint.
+const TEXT_API_ROLES = ["llms_txt", "llms_full", "docs", "onboarding", "auth"];
+const BASE_URL = /\bbase[ -]?url\b(?:\*\*)?\s*(?:is\s+|:\s*)?(?:\*\*)?\s*[`"<]?(https:\/\/[^\s`"'<>)\]*]+)/gi;
+const API_LOOKING_URL = /^https:\/\/api\.|^https:\/\/[^/]+\/(?:api|v\d+)(?:\/|$)/i;
+const API_WORD_BEFORE = /\b(?:API|REST)\b/;
+const YOUR_BEFORE = /\byour\b/i;
+const ENDPOINT = /\b(GET|POST|PUT|PATCH|DELETE)\s+(?:https?:\/\/([^\s/`"']+))?(\/[\w{}:.\-/]*[\w}])/g;
+const MIN_TEXT_ENDPOINTS = 2;
+
+function presentedAsApi(text, match, url) {
+  if (YOUR_BEFORE.test(text.slice(Math.max(0, match.index - 40), match.index))) return false;
+  return API_LOOKING_URL.test(url) || API_WORD_BEFORE.test(text.slice(Math.max(0, match.index - 150), match.index));
+}
+
+function productEndpoints(text, ownDomain, basePath) {
+  const out = new Set();
+  for (const m of text.matchAll(ENDPOINT)) {
+    if (m[2] && registrableDomain(m[2].toLowerCase()) !== ownDomain) continue;
+    let path = m[3];
+    if (basePath && (path === basePath || path.startsWith(`${basePath}/`))) path = path.slice(basePath.length) || "/";
+    path = path.replace(/^(?:\/api)?\/v\d+(?=\/)/, "");
+    out.add(`${m[1]} ${path}`);
+  }
+  return out;
+}
+
+function apiInPageText(observations, bodies) {
+  const home = observations.find((o) => o.role === "homepage");
+  if (!home) return null;
+  const ownDomain = registrableDomain(new URL(home.url).hostname);
+  const endpoints = new Set();
+  const basedOn = [];
+  let baseUrl = null;
+  for (const o of observations) {
+    const body = bodies.get(o.id);
+    if (!o.ok || !body || !TEXT_API_ROLES.includes(o.role) || !sameSite(o.url, home.url)) continue;
+    const text = body.html ? htmlToText(body.text) : body.text;
+    const base = [...text.matchAll(BASE_URL)]
+      .map((m) => ({ m, url: m[1].replace(/[.,;:]+$/, "") }))
+      .find(({ m, url }) => URL.canParse(url) && registrableDomain(new URL(url).hostname) === ownDomain && presentedAsApi(text, m, url));
+    if (!base) continue;
+    const found = productEndpoints(text, ownDomain, new URL(base.url).pathname.replace(/\/+$/, ""));
+    if (found.size < MIN_TEXT_ENDPOINTS) continue;
+    baseUrl = baseUrl || base.url;
+    basedOn.push(o.id);
+    for (const e of found) endpoints.add(e);
+  }
+  return baseUrl ? { baseUrl, endpoints: [...endpoints], basedOn } : null;
+}
+
 export function evaluateInterfaces(x, observations, bodies) {
   const home = observations.find((o) => o.role === "homepage");
   const website = { exists: verdict(home?.ok ? "yes" : home ? "no" : "unknown", home?.ok ? `homepage returned ${home.status}` : `homepage ${home?.status || home?.error || "not fetched"}`, [home?.id], "homepage_2xx") };
 
   const apiDocs = observations.filter((o) => o.ok && o.role === "api_docs");
   const spec = x.openapi;
+  const textApi = !spec && !apiDocs.length ? apiInPageText(observations, bodies) : null;
   let api;
   if (spec) {
     const specObs = spec.evidence[0].obs;
@@ -46,6 +108,14 @@ export function evaluateInterfaces(x, observations, bodies) {
       machineReadableSpec: verdict("no", "no OpenAPI document at /openapi.json, /v3/api-docs, /swagger.json or linked", apiDocs.map((o) => o.id), "openapi_document_parsed"),
       discoverableFromDocs: verdict("unknown", "no spec to locate", [], null),
     };
+  } else if (textApi) {
+    api = {
+      exists: verdict("partial", `the docs state the API base URL ${textApi.baseUrl} and list ${textApi.endpoints.length} endpoints in page text (for example ${textApi.endpoints[0]}); no OpenAPI document was found`, textApi.basedOn, "api_base_url_and_endpoints_in_text"),
+      machineReadableSpec: verdict("no", "no OpenAPI document at /openapi.json, /v3/api-docs, /swagger.json or linked", textApi.basedOn, "openapi_document_parsed"),
+      discoverableFromDocs: verdict("unknown", "no spec to locate", [], null),
+    };
+    api.exists.baseUrl = textApi.baseUrl;
+    api.exists.endpointCount = textApi.endpoints.length;
   } else {
     api = {
       exists: verdict("unknown", "no OpenAPI document and no page that reads as API documentation; an API may exist behind a login or on another host", [], "openapi_document_parsed"),

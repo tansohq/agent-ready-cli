@@ -7,7 +7,7 @@ export const SCHEMA_DOC = {
   conventions: {
     observation: "One HTTP fetch: id, role, url, status, contentType, bytes, sha256, fetchedAt, discoveredVia (well_known | link from another observation | sitemap), excerpt. Never judged.",
     fact: "{ value, method: 'extracted', evidence: [{ obs, quote }] }. Deterministically pulled from an observation. null when not found.",
-    evaluation: "{ verdict: yes|partial|no|unknown, reason, rule, basedOn: [obs ids], method: 'rule' }. A named rule applied to facts. unknown = not enough observed.",
+    evaluation: "{ verdict: yes|partial|no|unknown, reason, rule, basedOn: [obs ids], method: 'rule' }. A named rule applied to facts. unknown = not enough observed. interfaces.api.exists with rule api_base_url_and_endpoints_in_text (no OpenAPI document, an API documented in page text) also has baseUrl (the stated base URL) and endpointCount (distinct endpoints listed on the product's domain).",
     interpretation: "Not present in this version. No model-generated text is included; every string is either fetched or produced by a named rule.",
   },
   fields: {
@@ -16,6 +16,7 @@ export const SCHEMA_DOC = {
     startedAt_finishedAt: "ISO timestamps for the run; each observation has its own fetchedAt",
     product: "name, description, category as facts or null",
     observations: "every fetch made, in order",
+    otherHostsSkipped: "how many hosts that look like the product's own (the same registrable name, or it plus docs, api, dev, app or hq: acme.io or acmedocs.com for acme.dev, foo-docs.vercel.app for foo.vercel.app) had docs, auth or similar links that were not followed because they are another site by the Public Suffix List; third-party hosts are not counted; when no way to start was found and this is above 0, onboarding.reason says links to other hosts were not read",
     interfaces: "website, api, mcp, cli: existence and discoverability as evaluations",
     capabilities: "derived from OpenAPI tags, untagged operation summaries/IDs, or llms.txt sections; each with evidence and, for OpenAPI, operationDetails preserving summaries and descriptions",
     authentication: "methods declared in securitySchemes (not necessarily used), separate text mentions, requirement, agentCanUnderstandSetup, friction; none of these establishes live access",

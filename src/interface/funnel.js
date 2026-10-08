@@ -146,6 +146,8 @@ function use(doc) {
   const operations = caps.reduce((n, c) => n + (c.operationDetails?.length || 0), 0);
   const actions = operations ? `${operations} API ${operations === 1 ? "operation" : "operations"}` : `${caps.length} documented ${caps.length === 1 ? "action" : "actions"}`;
   if (caps.length && api?.machineReadableSpec?.verdict === "yes") return step("use", "agent_can", `${actions} in a machine-readable API spec.`, refs);
+  // No spec and no API reference page, but the docs give the base URL and list endpoints: an agent can call those.
+  if (api?.exists?.rule === "api_base_url_and_endpoints_in_text") return step("use", "agent_can", `The docs give the API base URL (${api.exists.baseUrl}) and list ${api.exists.endpointCount} endpoints in page text. No OpenAPI spec was found, so an agent has to read prose to call them.`, refs, "Publish an OpenAPI spec so an agent can call each action without reading prose.");
   if (caps.length && ["yes", "partial"].includes(api?.exists?.verdict)) return step("use", "agent_can", `${actions} in the API docs.`, refs, "Publish an OpenAPI spec so an agent can call each action without reading prose.");
   if (caps.length) return step("use", "not_checked", `${actions}, but no API was found to call them through.`, refs);
   return step("use", "not_checked", "No API actions were found in the pages read.", refs);

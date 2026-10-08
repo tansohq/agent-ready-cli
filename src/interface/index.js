@@ -18,7 +18,7 @@ export const LIMITS = [
 export async function buildInterface({ url, version, log = () => {}, runId = newRunId(), fetchSource }) {
   const startedAt = new Date().toISOString();
   const base = new URL(url).toString();
-  const { observations, bodies } = await collectSources(base, { log, fetchSource });
+  const { observations, bodies, otherHostsSkipped } = await collectSources(base, { log, fetchSource });
   const x = extractAll(observations, bodies);
   const doc = {
     schema: SCHEMA_ID,
@@ -28,6 +28,7 @@ export async function buildInterface({ url, version, log = () => {}, runId = new
     finishedAt: null,
     product: x.product,
     observations,
+    otherHostsSkipped,
     interfaces: evaluateInterfaces(x, observations, bodies),
     capabilities: deriveCapabilities(x),
     authentication: evaluateAuthentication(x, observations),

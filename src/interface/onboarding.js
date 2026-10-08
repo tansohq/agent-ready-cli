@@ -8,7 +8,11 @@ const SIGNALS = {
   // The docs describe an agent getting an account or credential by itself.
   // Not "self sign-up" or "agent mode": real products use both for features unrelated to an agent signing itself up
   // (Twilio's WhatsApp sender self sign-up, Postman's and Copilot's Agent Mode). The code token agent_mode stays.
-  bootstrap: /\bagent[- ]?sign[- ]?up\b|\/agents?\/sign-?up\b|\bsign(?:s|ing)? (?:itself|themselves) up\b|\bregisters? itself\b|\bno (?:human|account|signup|sign-up)(?: or API key)? (?:is )?(?:needed|required)\b|\bwithout (?:a |an )?(?:human|account)\b|\banonymous(?:ly)? (?:create|creates|provision|access|account|project|identit)|\btemporary (?:account|project|deployment)s?\b|--temporary\b|\binit --agent\b|\bagent_mode\b|\bbot[_ ]signup\b|\bidentity_types_supported\b/i,
+  // "Your agent can sign up.", "Agents create their own accounts.": the agent signs up here, and the clause ends there,
+  // or goes on only to say how ("in one API call", "and get an API key instantly", ", get a key", "— no forms", "(beta)").
+  // Agent-infra products use the same words for signing up somewhere else: AgentLine's "so your agent can sign up and
+  // verify", AgentID's "apps where agents can sign up and sign in with AgentID". "No agent can sign up" is the opposite.
+  bootstrap: /\bagent[- ]?sign[- ]?up\b|(?<!\b(?:no|not|never|where)\s+(?:\w+\s+){0,2})\bagents? (?:can )?(?:sign(?:s)? (?:itself |themselves )?up|creates? (?:its|their) own (?:accounts?|API keys?))(?:\*\*)?(?: here| for an account| in one (?:API )?(?:call|request)| and get (?:an? |its |their )?(?:own )?(?:API )?key| \(beta\)| instantly| immediately| automatically| programmatically)*(?=(?:\*\*)?\s*(?:[.;!)\n]|,\s*(?:and )?get\b|[—–]|$))|\/agents?\/sign-?up\b|\bsign(?:s|ing)? (?:itself|themselves) up\b|\bregisters? itself\b|\bno (?:human|account|signup|sign-up)(?: or API key)? (?:is )?(?:needed|required)\b|\bwithout (?:a |an )?(?:human|account)\b|\banonymous(?:ly)? (?:create|creates|provision|access|account|project|identit)|\btemporary (?:account|project|deployment)s?\b|--temporary\b|\binit --agent\b|\bagent_mode\b|\bbot[_ ]signup\b|\bidentity_types_supported\b/i,
   // A person can take ownership afterwards.
   claim: /\bclaim(?:s|ed|ing)? (?:it|this|the|your|their) (?:account|project|workspace|deployment|bucket|inbox|resources?)\b|\bclaim (?:url|code|link|token|flow|page|email)\b|\bclaim_url\b|\bclaimUrl\b|\/claim\b|\bunclaimed\b|\bclaimable\b|\b(?:human|owner|person) (?:can |may |will )?(?:later )?claim\b|\battach (?:a |the )?(?:human )?owner\b|\badopt (?:the |this )?workspace\b/i,
   // What the agent made goes away unless someone keeps it.
@@ -28,8 +32,9 @@ const SIGNALS = {
   agentIdentity: /\b[Vv]erified agent identity\b|\b[Aa]gent identity (?:token|assertion|provider)\b|\b[Aa]gent[- ]verified (?:identity|registration|sign-?in)\b/,
   // A person has to set access up before the agent starts.
   // A token a person creates counts the same way: GitHub's "personal access token", Vercel's "create a token on the
-  // tokens page", Neon's "authenticate with a Neon API key".
-  humanFirst: /\bpersonal access tokens?\b|\bcreate (?:a |an )?(?:new )?(?:access |API )?token (?:on|in|from) (?:the |your )?(?:\w+ )?(?:tokens? page|dashboard|settings|account settings|console)\b|\bauthenticate (?:with|using) (?:a |an |your )?(?:[A-Z]\w+ )?API key\b|\bmanage (?:your )?API keys? (?:at|in|from|on)\b|\b(?:generate|get|find|create) (?:an |your )?API key (?:in|from|at|on) (?:the |your )?(?:dashboard|console|portal|settings|account)\b|\bcreate (?:an |your )?API key (?:in|from) (?:the |your )?(?:dashboard|console|portal)\b|\b(?:sign|log) ?in to (?:the |your )?(?:dashboard|console|portal)\b|\blink (?:your|a) (?:Stripe )?account\b|\btell the user to complete sign-?in\b|\bbrowser was opened for authentication\b/i,
+  // tokens page", Neon's "authenticate with a Neon API key", MarginFront's "Get a secret API key (`mf_sk_*`) from the
+  // dashboard's Developer Zone".
+  humanFirst: /\bpersonal access tokens?\b|\bcreate (?:a |an )?(?:new )?(?:access |API )?token (?:on|in|from) (?:the |your )?(?:\w+ )?(?:tokens? page|dashboard|settings|account settings|console)\b|\bauthenticate (?:with|using) (?:a |an |your )?(?:[A-Z]\w+ )?API key\b|\bmanage (?:your )?API keys? (?:at|in|from|on)\b|\b(?:generate|get|find|create|copy) (?:a |an |your )?(?:new )?(?:secret |live |test )?API key\b[^.\n]{0,40}?\b(?:in|from|at|on|under) (?:the |your )?(?:dashboard|console|portal|settings|account)\b|\bcreate (?:an |your )?API key (?:in|from) (?:the |your )?(?:dashboard|console|portal)\b|\b(?:sign|log) ?in to (?:the |your )?(?:dashboard|console|portal)\b|\blink (?:your|a) (?:Stripe )?account\b|\btell the user to complete sign-?in\b|\bbrowser was opened for authentication\b/i,
   // A request is paid for in the request itself. A bare 402 is not this: products also
   // use it to mean "claim first" (Cosmic) or "over your plan" (Inkbox).
   payPerRequest: /\bx402\b|\bX-PAYMENT\b|\bPAYMENT-REQUIRED\b/,
@@ -41,7 +46,13 @@ const SIGNALS = {
   cliToken: /--with-token\b|\b[Pp]ass the --(?:token|api-key) (?:option|flag)\b|\b[A-Z][A-Z0-9]*_(?:TOKEN|API_KEY|ACCESS_TOKEN)\b environment variable|\benvironment variables? (?:named |called )?\b[A-Z][A-Z0-9]*_(?:TOKEN|API_KEY|ACCESS_TOKEN)\b/,
   // The CLI signs in through a browser: a person has to be at the machine once.
   cliBrowserLogin: /\bweb-based browser flow\b|\blaunches a browser\b|\bbrowser window where you (?:authorize|log in|sign in)\b|\brequires manual input\b/i,
-  httpBootstrap: /\bPOST\s+(?:https?:\/\/\S+)?\/\S*(?:sign-?up|register|agents?)\b|curl -X POST \S*(?:sign-?up|register|agents?)/i,
+  // A signup call: the path ends in a signup, register or onboard segment (Moltbook's /api/v1/agents/register, Cosmic's
+  // /v3/agents/sign-up, Telnyx's /v2/bot_signup), or in agent/identity or agent/auth (Neon's
+  // claimable.neon.tech/v1/agent/identity, Firecrawl's www.firecrawl.dev/agent/auth). A path that only contains
+  // "agents" is not one: an agent-billing product's POST /v1/agents or POST /v1/pricing-plans/:planId/agents creates a
+  // record about its customer's agent. Nor is a call under the signup path: Inkbox's
+  // POST /agent-signup/{identity_id}/approve is a person approving.
+  httpBootstrap: /\bPOST\s+(?:https?:\/\/[^\s/]+)?(?:\/[\w.:{}-]+)*\/(?:(?:\w+[-_])?(?:sign[-_]?ups?|register|registration|onboard)|agents?\/(?:identity|auth))\/?(?![\w/{-])|curl -X POST \S*\/(?:(?:\w+[-_])?(?:sign[-_]?ups?|register|registration|onboard)|agents?\/(?:identity|auth))\/?(?![\w/{-])/i,
 };
 
 export const PATTERNS = {
@@ -106,10 +117,29 @@ const AGENTID_INTEGRATION_PAGE = /\bAdd AgentID to\b|\b[Aa]ccepting AgentID sign
 // Better Auth plugin lets you sign in with AgentID". Only the sentence itself: Keenable's llms.txt line ends just
 // before a link to its "Integrations directory".
 const AGENTID_VENDOR = /\b(?:connection|connector|plugin|integration)s?\b/i;
+// Looks for the sentence's ends only within 200 characters of the match: a 2 MB page on one line would otherwise be
+// scanned end to end for every match. A line break followed by a lowercase letter is hard-wrapped prose, not the end of
+// a sentence: fly.io's auth.md wraps "registers itself\ndynamically".
 function sentenceAround(text, start, end) {
-  const from = Math.max(text.lastIndexOf(". ", start), text.lastIndexOf("\n", start), start - 200);
-  const stops = [text.indexOf(". ", end), text.indexOf("\n", end), end + 200].filter((i) => i >= end);
-  return text.slice(Math.max(0, from), Math.min(...stops));
+  const lo = Math.max(0, start - 200);
+  const near = text.slice(lo, Math.min(text.length, end + 200));
+  const wrapped = (i) => /[a-z]/.test(near[i + 1] || "");
+  let from = Math.max(near.lastIndexOf(". ", start - lo), 0);
+  for (let i = near.lastIndexOf("\n", start - lo); i > from; i = near.lastIndexOf("\n", i - 1)) {
+    if (!wrapped(i)) {
+      from = i;
+      break;
+    }
+  }
+  let to = near.indexOf(". ", end - lo);
+  if (to < 0) to = near.length;
+  for (let i = near.indexOf("\n", end - lo); i >= 0 && i < to; i = near.indexOf("\n", i + 1)) {
+    if (!wrapped(i)) {
+      to = i;
+      break;
+    }
+  }
+  return near.slice(from, to);
 }
 
 // News that another company added AgentID: "Clerk now supports AgentID as a social connection", "Turso added Sign
@@ -168,7 +198,64 @@ function findAgentIdSignIn(doc, bodies) {
   return { entries: out, ownerDocumented };
 }
 
-function findSignals(observations, bodies) {
+// A sentence about the product's own customers is the product's domain, not an agent starting with this product:
+// a billing product's "your customers can check out without an account", "No signup required for your end users".
+// Not "your client": that is the reader's HTTP or MCP client (Cosmic, fly.io, Exa).
+const DOMAIN_ACTORS = /\byour (?:customers?|users?|end[- ]users?|buyers?|subscribers?)\b|\b(?:end[- ]users?|shoppers?)\b|\bguest checkout\b/i;
+// Agent signup said to be off: Browser Use's "Agent signup is off. Create an API key in Cloud".
+const SIGNUP_OFF = /\bagent[- ]?sign[- ]?ups? (?:is|are|was|has been) (?:currently |now |temporarily )?(?:off|disabled|closed|paused|unavailable|not (?:available|enabled|open|supported))\b/i;
+// A person without an account is a person signing up: fly.io's "`fly auth signup` is the same flow for a human without
+// an account".
+const PERSON_WITHOUT_ACCOUNT = /\b(?:humans?|persons?|people|users?|developers?) without (?:a |an )?account\b/i;
+// OAuth dynamic client registration registers a client app, not an account: fly.io's "client follows that to the
+// authorization server, registers itself dynamically, and runs the browser flow; the human approves in the browser".
+const CLIENT_REGISTRATION = /\bregisters?\s+itself\s+dynamically\b|\bdynamic(?:ally)?\s+(?:client\s+)?registration\b|\bclient\s+registration\b/i;
+// "Use x402 without a human" is paying per request, which pay_per_request reports; it is not an account.
+const PAYMENT_WAY_IN = /\bx402\b|\bMPP\b/;
+// Selling with x402 is not paying with it: Stripe's "Charge for API requests, tool calls, and content via HTTP 402",
+// "accept x402 payments", "monetize your API". "Browser Use Cloud now accepts payment in USDC over the x402 protocol"
+// is the product being paid, so the third person "accepts" stays.
+const SELLER = /\bcharg(?:e|ing) (?:for|your)\b|\bmonetiz\w*|\baccept(?:ing)? (?:x402|payments?|stablecoins?)\b|\bget(?:ting)? paid\b|\bpaywall\w*/i;
+// Describing the protocol is not this product taking it: Stripe's "x402 is the internet's payment standard for agentic
+// payments at scale".
+const PROTOCOL_DESCRIPTION = /\b(?:x402|MPP)\b[^.]{0,40}?\bis (?:a|an|the)\b[^.]{0,80}?\b(?:standard|protocol)\b/i;
+// Paying at another site is not paying this product: Stripe's "Agents can now contribute directly to Stripe Climate at
+// [climate.stripe.dev](…) using MPP or x402". The protocols' own sites are not other products.
+const AT_HOST = /\b(?:at|on)\s+\[?(?:https?:\/\/)?((?:[a-z0-9-]+\.)+[a-z]{2,})\b/gi;
+const PROTOCOL_SITES = new Set(["x402.org", "mpp.dev"]);
+function paysElsewhere(sentence, ownDomain) {
+  return [...sentence.matchAll(AT_HOST)].some((m) => {
+    const domain = registrableDomain(m[1].toLowerCase());
+    return domain !== ownDomain && !PROTOCOL_SITES.has(domain);
+  });
+}
+const EXAMPLE_PAGE = /\/(?:templates?|examples?|starters?)\//i;
+// OAuth dynamic client registration (POST /oauth/register, /oauth2/register, /connect/register) registers a client app
+// with an authorization server; it is not an agent getting an account.
+const OAUTH_REGISTRATION = /\/(?:oauth2?|connect|clients?|dcr)\/regist(?:er|ration)\b/i;
+// Whether a sentence holding a match is about something else; such a match is skipped and the next one tried.
+const SKIP = {
+  bootstrap: (sentence) => DOMAIN_ACTORS.test(sentence) || SIGNUP_OFF.test(sentence) || PERSON_WITHOUT_ACCOUNT.test(sentence) || PAYMENT_WAY_IN.test(sentence) || CLIENT_REGISTRATION.test(sentence),
+  httpBootstrap: (sentence, ownDomain, match) => DOMAIN_ACTORS.test(sentence) || OAUTH_REGISTRATION.test(match),
+  payPerRequest: (sentence, ownDomain) => DOMAIN_ACTORS.test(sentence) || SELLER.test(sentence) || PROTOCOL_DESCRIPTION.test(sentence) || paysElsewhere(sentence, ownDomain),
+};
+const GLOBAL = Object.fromEntries(Object.keys(SKIP).map((name) => [name, new RegExp(SIGNALS[name].source, `${SIGNALS[name].flags}g`)]));
+
+// The first match whose sentence is not about something else. Tries at most MAX_TRIED matches a page, so a page that
+// repeats a skipped phrase thousands of times costs no more than one that says it once.
+const MAX_TRIED = 200;
+function firstKept(text, re, skip, ownDomain) {
+  let tried = 0;
+  for (const m of text.matchAll(re)) {
+    if (!skip(sentenceAround(text, m.index, m.index + m[0].length).replace(/\s+/g, " "), ownDomain, m[0])) return m;
+    tried += 1;
+    if (tried >= MAX_TRIED) return null;
+  }
+  return null;
+}
+
+function findSignals(observations, bodies, targetUrl) {
+  const ownDomain = registrableDomain(new URL(targetUrl).hostname);
   const found = Object.fromEntries(Object.keys(SIGNALS).map((name) => [name, []]));
   for (const obs of observations) {
     const body = bodies.get(obs.id);
@@ -176,7 +263,12 @@ function findSignals(observations, bodies) {
     const text = body.html ? htmlToText(body.text) : body.text;
     for (const [name, re] of Object.entries(SIGNALS)) {
       if (found[name].length >= EVIDENCE_PER_SIGNAL) continue;
-      const match = re.exec(text);
+      // A sitemap's URL slugs ("/posts/x402-launch") are page names, and a template or example page
+      // (vercel.com/templates/next.js/x402-ai-starter) is code for the reader's own app: neither documents paying this product.
+      if (name === "payPerRequest" && (obs.role === "sitemap" || EXAMPLE_PAGE.test(new URL(obs.url).pathname))) continue;
+      // Guarded signals try every match, so one sentence about something else does not hide a real one.
+      const skip = SKIP[name];
+      const match = skip ? firstKept(text, GLOBAL[name], skip, ownDomain) : re.exec(text);
       if (match) found[name].push({ obs: obs.id, quote: quoteAround(text, match.index), agentFacing: AGENT_FACING.has(obs.role) });
     }
   }
@@ -239,7 +331,7 @@ function findApiHosts(doc, bodies) {
 
 export function detectOnboarding(doc, bodies) {
   const observations = doc.observations;
-  const found = findSignals(observations, bodies);
+  const found = findSignals(observations, bodies, doc.target.url);
   const onIssuerSite = sameSite(AGENTID_ISSUER, doc.target.url);
   const agentId = onIssuerSite ? { entries: [], ownerDocumented: false } : findAgentIdSignIn(doc, bodies);
   found.agentIdSignIn = agentId.entries;
@@ -293,6 +385,6 @@ export function detectOnboarding(doc, bodies) {
     patterns,
     apiHosts: findApiHosts(doc, bodies),
     primary: agentFirst?.id || patterns[0]?.id || null,
-    reason: patterns.length ? `${patterns.length} way${patterns.length === 1 ? "" : "s"} for an agent to start, from the sources read.` : "No way for an agent to start was found in the sources read. This is not evidence that none exists.",
+    reason: patterns.length ? `${patterns.length} way${patterns.length === 1 ? "" : "s"} for an agent to start, from the sources read.` : `No way for an agent to start was found in the sources read.${doc.otherHostsSkipped ? " Links to other hosts were not read." : ""} This is not evidence that none exists.`,
   };
 }

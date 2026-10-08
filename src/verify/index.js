@@ -1,5 +1,5 @@
 import { defineSignupTask } from "../harness/tasks/signup.js";
-import { registrableDomain } from "../interface/sources.js";
+import { PRODUCT_SUBDOMAINS, registrableDomain } from "../interface/sources.js";
 
 // agent-ready test: a real agent tries the task on the user's own product, and a separate checker decides.
 // The checker is the call the user declared in agent-ready.yml, made three times: with the agent's key (must
@@ -155,7 +155,7 @@ export async function checkKey(spec, key, { fetchImpl = fetch, fields = {} } = {
 export function networkFor(targetUrl, spec) {
   const host = new URL(targetUrl).hostname;
   const apex = registrableDomain(host);
-  const hosts = [host, apex, ...["www", "api", "docs", "app", "auth", "console", "dashboard", "developers"].map((s) => `${s}.${apex}`), new URL(spec.url.replace(/\{[^}]+\}/g, "x")).hostname, ...(spec.exchange ? [new URL(spec.exchange.url.replace(/\{[^}]+\}/g, "x")).hostname] : []), ...(spec.hosts || [])];
+  const hosts = [host, apex, ...PRODUCT_SUBDOMAINS.map((s) => `${s}.${apex}`), new URL(spec.url.replace(/\{[^}]+\}/g, "x")).hostname, ...(spec.exchange ? [new URL(spec.exchange.url.replace(/\{[^}]+\}/g, "x")).hostname] : []), ...(spec.hosts || [])];
   return [...new Set(hosts)];
 }
 

@@ -90,7 +90,12 @@ export function extractRobots(observations, bodies) {
 export function extractLlmsTxt(observations, bodies) {
   const page = pages(observations, bodies, ["llms_txt"])[0];
   if (!page || page.html) return null;
-  const links = [...page.text.matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)].map((m) => ({ text: m[1].slice(0, 80), href: m[2] }));
+  // Link text is bounded and stays on one line: an unbounded [^\]]* rescans the rest of the file from every unclosed "[".
+  const links = [...page.text.matchAll(/\[([^\[\]\n]{0,500})\]\(([^)\s]+)\)/g)].map((m) => ({ text: m[1].slice(0, 80), href: m[2] }));
+  // Bare URLs are links too ("- Website: https://marginfront.com"), once each, outside code blocks and markdown links: a
+  // curl example's URL is not part of the index, and a templated https://{workspace}.acme.dev is not a page.
+  const prose = page.text.replace(/```[\s\S]*?```/g, " ").replace(/\[[^\[\]\n]{0,500}\]\([^)\s]+\)/g, " ").replace(/`[^`\n]*`/g, " ");
+  const bareUrls = new Set((prose.match(/https?:\/\/[^\s<>()"'`\]]+/g) || []).map((url) => url.replace(/[.,;:!?*]+$/, "")).filter((url) => !/[{}]/.test(url)));
   // Links grouped under their ## heading: the heading names a product area, the links under it name what it offers.
   const sections = [];
   let current = null;
@@ -101,10 +106,10 @@ export function extractLlmsTxt(observations, bodies) {
       sections.push(current);
       continue;
     }
-    const l = line.match(/\[([^\]]*)\]\(([^)\s]+)\)/);
+    const l = line.match(/\[([^\[\]\n]{0,500})\]\(([^)\s]+)\)/);
     if (l && current) current.links.push({ text: l[1].slice(0, 80), href: l[2] });
   }
-  return fact({ bytes: page.text.length, links: links.slice(0, 40), linkCount: links.length, sections: sections.map((x) => x.name), sectionLinks: sections }, page.obs.id, page.text.split("\n").slice(0, 3).join(" "));
+  return fact({ bytes: page.text.length, links: links.slice(0, 40), linkCount: links.length + bareUrls.size, sections: sections.map((x) => x.name), sectionLinks: sections }, page.obs.id, page.text.split("\n").slice(0, 3).join(" "));
 }
 
 export function extractAgentJson(observations, bodies) {
