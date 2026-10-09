@@ -264,7 +264,7 @@ Examples:
     let inferred = null;
     if (!(config.verify_call || "").trim()) {
       const live = !opts.json && Boolean(process.stderr.isTTY);
-      if (live) process.stderr.write(`  ${style.dim("No verify_call. Reading the product's API docs…")}`);
+      if (live) process.stderr.write(`  ${style.dim("Finding a call that proves the agent's key works…")}`);
       inferred = await inferVerifyCall({ url, version: pkg.version, cwd: process.cwd() });
       if (live) process.stderr.write("\r\x1b[2K");
       if (inferred.error) fail(opts, 2, "verify_call_invalid", `${CONFIG_FILE} has no verify_call, and none could be taken from the product's docs: ${inferred.error}.`, addCallHint);
@@ -274,13 +274,15 @@ Examples:
       let accepted = Boolean(opts.yes);
       if (!accepted && process.stdin.isTTY && !opts.json) {
         const rl = createInterface({ input: process.stdin, output: process.stderr });
-        const reply = await rl.question(`\n  ${willCheck}${offSiteNote}\n  Use it? [Y/n] `).catch((err) => {
+        // A person reads the call and where it came from; the "Will check with" line stays for logs and agents.
+        const ask = `\n  To prove the agent's key works, we'll call your API with it after signup:\n    ${style.bold(inferred.call)}   ${style.dim(`(from ${inferred.specUrl.replace(/^https?:\/\//, "")})`)}${offSiteNote}\n  Use this call? [Y/n] `;
+        const reply = await rl.question(ask).catch((err) => {
           if (err.code === "ABORT_ERR") return "n";
           throw err;
         });
         rl.close();
         if (!/^(y(es)?)?$/i.test(reply.trim())) {
-          console.error(`  Cancelled. Nothing saved. ${addCallHint}`);
+          console.error(`  Cancelled. Nothing saved. To use a different call, add it to ${CONFIG_FILE}, for example: verify_call: GET https://api.example.com/v1/me`);
           process.exit(130);
         }
         accepted = true;

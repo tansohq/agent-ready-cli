@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.7 (2026-10-09)
+
+- `test` in a terminal, with no `verify_call`, asks "To prove the agent's key works, we'll call your API with it after signup:" and shows the call and the document it came from, then "Use this call? [Y/n]", where it printed the "Will check with …" sentence and "Use it?". Without a terminal, and with `--yes`, the "Will check with …" line is unchanged. While it reads the docs it says "Finding a call that proves the agent's key works…".
+- app.tansohq.com, same release: the dashboard says what a check and a test are ("A check reads your public pages (free). A test sends a real agent through them."), uses the CLI's pattern names, shows Passed, "Failed: stopped at <step>", "Didn't finish (free)" and "Not run yet", lists each test once, puts paused schedules in one notice with "Turn schedules back on", and orders Account as you, runs and billing, claimed workspaces, agents. The CLI 0.3 runs block is gone.
+
 ## 0.4.6 (2026-10-08)
 
 - `check` ends with a next step instead of "A real agent run is the next check." In a terminal it asks "What next?": 1 runs a test now (test still shows its plan and asks before the agent starts), 2 shows the plan for free, 3 prints the commands and quits. The default is 1 when there is nothing to fix and 3 when there are fixes. With `--yes`, `--json`, or no terminal on stdin or stderr, it prints the two commands under "Next" and never waits for an answer. `brief.md` names the same commands. `--json` output is unchanged.
