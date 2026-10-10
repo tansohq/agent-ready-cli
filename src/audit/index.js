@@ -113,8 +113,7 @@ export function buildAudit({ doc, funnel, answers, task, runId, version }) {
     },
     answers: Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, { value: a.value, label: optionLabel(k, a.value), source: a.source }])),
     findings,
-    // The interface's own wording names an older run; in the CLI that run is a test.
-    limits: doc.limits.map((l) => l.replace("live verification requires an agent usability run", "public pages cannot show whether a step works; a test runs a real agent")),
+    limits: doc.limits,
   };
 }
 

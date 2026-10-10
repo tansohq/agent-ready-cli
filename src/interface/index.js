@@ -11,7 +11,7 @@ export const LIMITS = [
   "no JavaScript rendering; client-rendered pages read as empty",
   "links followed only on the same registrable domain; docs on a third-party host are not read",
   "no model-generated interpretation; every value is fetched or produced by a named rule",
-  "public inspection and task assessment do not execute tasks; live verification requires an agent usability run",
+  "public pages cannot show whether a step works; a test runs a real agent",
 ];
 
 // URL → structured agent interface. Three passes, each reading only the previous one's output:

@@ -282,7 +282,7 @@ describe("audit: command", () => {
     // With no agent-ready.yml yet, --yes writes the defaults so verify has a file to read.
     assert.equal(readConfig(join(cwd, "agent-ready.yml")).onboarding, audit.onboarding.chosen.id);
     assert.ok(readdirSync(out).includes("interface.json"));
-    assert.ok(audit.limits.includes("public inspection and task assessment do not execute tasks; public pages cannot show whether a step works; a test runs a real agent"), JSON.stringify(audit.limits));
+    assert.ok(audit.limits.includes("public pages cannot show whether a step works; a test runs a real agent"), JSON.stringify(audit.limits));
     assert.match(readFileSync(join(out, "brief.md"), "utf8"), / · checked \d{4}-\d{2}-\d{2} · /);
   });
 

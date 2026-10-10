@@ -193,20 +193,18 @@ function withSite(picked, url) {
   return { ...picked, apiHost: new URL(picked.url).hostname, offSite: !sameSite(picked.url, url) };
 }
 
-// The saved inspection when there is one, else the same public inspection `check` runs. The call comes from the
-// product's own OpenAPI document when it has a GET that needs a key. Otherwise from an OpenAPI document its
-// agent-facing pages link to on the same registrable domain, preferring one whose call reads the caller's account.
-// Documents are fetched again in full, because interface.json keeps only an excerpt. GET only.
-export async function inferVerifyCall({ url, version, cwd, log = () => {}, fetchSource = get }) {
-  const saved = latestInterface(cwd, url);
-  const interfaceFile = saved?.path || null;
-  const doc = saved ? saved.doc : await buildInterface({ url, version, log, fetchSource });
+// The call from an interface document already in hand, read with fetchSource: the CLI's saved or fresh inspection,
+// or a check the hosted service stored. The call comes from the product's own OpenAPI document when it has a GET
+// that needs a key. Otherwise from an OpenAPI document its agent-facing pages link to on the same registrable domain,
+// preferring one whose call reads the caller's account. Documents are fetched again in full, because interface.json
+// keeps only an excerpt. GET only.
+export async function inferFromInterface({ doc, url, fetchSource = get }) {
   const spec = doc.interfaces?.api?.machineReadableSpec;
   const obs = spec?.verdict === "yes" ? (doc.observations || []).find((o) => o.id === spec.basedOn?.[0]) : null;
   let ownError = "the product's public pages have no OpenAPI document in JSON to take one from";
   if (obs) {
     const own = await callFrom(obs.url, url, fetchSource);
-    if (!own.error) return { ...withSite(own, url), specUrl: obs.url, specVia: null, interfaceFile };
+    if (!own.error) return { ...withSite(own, url), specUrl: obs.url, specVia: null };
     ownError = own.error;
   }
   const { specs, yaml } = await linkedSpecs(doc, url, fetchSource);
@@ -216,7 +214,7 @@ export async function inferVerifyCall({ url, version, cwd, log = () => {}, fetch
   for (const l of linked) {
     const picked = await callFrom(l.specUrl, url, fetchSource);
     if (picked.error) skipped.push(`${l.specUrl}: ${picked.reason}`);
-    else picks.push({ ...withSite(picked, url), specUrl: l.specUrl, specVia: l.via, interfaceFile });
+    else picks.push({ ...withSite(picked, url), specUrl: l.specUrl, specVia: l.via });
   }
   // A same-site call first, then one that reads the caller's account.
   const rank = (p) => Number(p.offSite) * 2 + Number(!PREFERRED.test(new URL(p.url).pathname));
@@ -224,5 +222,13 @@ export async function inferVerifyCall({ url, version, cwd, log = () => {}, fetch
   if (chosen) return chosen;
   const tried = skipped.length ? `; the OpenAPI ${skipped.length === 1 ? "document" : "documents"} its agent pages link to ${skipped.length === 1 ? "was" : "were"} skipped (${skipped.join("; ")})` : "";
   const notRead = yaml.length ? `; linked YAML ${yaml.length === 1 ? "document is" : "documents are"} not read (${yaml.join(", ")})` : "";
-  return { error: `${ownError}${tried}${notRead}`, interfaceFile };
+  return { error: `${ownError}${tried}${notRead}` };
+}
+
+// The saved inspection when there is one, else the same public inspection `check` runs, then inferFromInterface.
+export async function inferVerifyCall({ url, version, cwd, log = () => {}, fetchSource = get }) {
+  const saved = latestInterface(cwd, url);
+  const interfaceFile = saved?.path || null;
+  const doc = saved ? saved.doc : await buildInterface({ url, version, log, fetchSource });
+  return { ...(await inferFromInterface({ doc, url, fetchSource })), interfaceFile };
 }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.9 (2026-10-09)
+
+- The limits list in `check` output and `interface.json` says "public pages cannot show whether a step works; a test runs a real agent", where it said "live verification requires an agent usability run". Checks saved before this release keep the old sentence.
+- `test` finds its check call with the same rules as before; the lookup was split so the hosted app can use it too. The plan, `verify_call` and `--json` output are unchanged.
+- app.tansohq.com, same release:
+  - Products shows a "Get started" checklist until it is done: check your product, test it with a real agent, keep it passing. It can be hidden.
+  - "Test signup on <host>" builds a signup test from the latest check. The result URL comes from the product's OpenAPI document when one qualifies (`GET /v1/runs/:id/suggested-test`, looked up once per check and at most 20 new lookups per workspace an hour), so the person only confirms they may test the product. A test that checks the agent's key no longer needs text the answer contains: the call with the key must answer 200 and the same call with no key and with a wrong key must be refused. Tests that already have the text are unchanged.
+  - After a test passes, "Run daily, email me" turns on the daily schedule and email alerts.
+  - The blank setup form is now "Custom test". "Book a conversation" appears only when a test needs a test account the team arranges.
+  - A check report downloads as "Download report" (Markdown) or "Raw data (JSON)".
+
 ## 0.4.8 (2026-10-09)
 
 - `check` for a new host in a folder whose `agent-ready.yml` names another product drops that file's `verify_*` lines when it rewrites the answers ("Dropped verify_call for <old host>; test will pick a call for <new host>."), so the next `test` no longer sends the new product's agent key to the old product's API. `--yes` still never overwrites an existing `agent-ready.yml`; when that file names another product, `check` says so under Next ("agent-ready.yml here is for <host>, so test would run there.") instead of offering `test`.
