@@ -15,11 +15,19 @@ export function readConfig(path) {
   return config;
 }
 
-// Rewriting the answers keeps any verify_* lines the user already filled in.
+// The host a saved or passed url names: "example.com" and "https://example.com" both give example.com.
+export function configHost(url) {
+  return new URL(url.startsWith("http") ? url : `https://${url}`).host;
+}
+
+// Rewriting the answers keeps any verify_* lines the user already filled in, unless the file was for another host:
+// those lines would send this product's agent key to the old product. Returns the old host when it dropped them.
 export function writeConfig(path, { url, task, answers }) {
   const kept = readConfig(path) || {};
   const verifyKeys = KEYS.filter((k) => k.startsWith("verify_"));
-  const filledIn = verifyKeys.filter((k) => kept[k]);
+  const otherHost = kept.url && configHost(kept.url) !== configHost(url) ? configHost(kept.url) : null;
+  const filledIn = otherHost ? [] : verifyKeys.filter((k) => kept[k]);
+  const dropped = otherHost && verifyKeys.some((k) => kept[k]) ? otherHost : null;
   const verifyLines = filledIn.length
     ? ["# What `agent-ready test` checks: one call made with the key the agent got.", ...filledIn.map((k) => `${k}: ${kept[k]}`)]
     : [
@@ -56,6 +64,7 @@ export function writeConfig(path, { url, task, answers }) {
     "",
   ];
   writeFileSync(path, lines.join("\n"));
+  return { droppedVerifyFor: dropped };
 }
 
 // Saves a verify_call that `test` inferred and the person accepted. Every other line stays as it is; the commented

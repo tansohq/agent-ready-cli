@@ -2,8 +2,8 @@
 
 ## Using agent-ready on a product
 
-- To audit a product, follow `skills/agent-ready/SKILL.md`: `npx @tansohq/agent-ready check <url> --json --yes`. It reads public pages only and costs nothing.
-- To run a real agent against a product, follow `skills/agent-ready-verify/SKILL.md`, and only when the developer asks. `test --check` is free; a real `test` creates an account on the product and spends model money (capped by `--max-budget-usd`, default 5).
+- To check a product, follow `skills/agent-ready/SKILL.md`: `npx @tansohq/agent-ready check <url> --json --yes`. It reads public pages only and costs nothing.
+- To test a product with a real agent, follow `skills/agent-ready-test/SKILL.md`, and only when the developer asks. `test --check` is free; a real `test` creates an account on the product and spends the developer's Claude Code model use (capped by `--max-budget-usd`, default 5).
 
 ## Working on this code
 

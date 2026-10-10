@@ -113,7 +113,8 @@ export function buildAudit({ doc, funnel, answers, task, runId, version }) {
     },
     answers: Object.fromEntries(Object.entries(answers).map(([k, a]) => [k, { value: a.value, label: optionLabel(k, a.value), source: a.source }])),
     findings,
-    limits: doc.limits,
+    // The interface's own wording names an older run; in the CLI that run is a test.
+    limits: doc.limits.map((l) => l.replace("live verification requires an agent usability run", "public pages cannot show whether a step works; a test runs a real agent")),
   };
 }
 
@@ -123,7 +124,7 @@ export function renderBrief(audit, doc) {
   const lines = [
     `# Agent onboarding brief: ${audit.product}`,
     "",
-    `${audit.target.url} · audited ${audit.generatedAt.slice(0, 10)} · public pages only (${audit.pagesRead} read)`,
+    `${audit.target.url} · checked ${audit.generatedAt.slice(0, 10)} · public pages only (${audit.pagesRead} read)`,
     "",
     `**${audit.headline}**`,
     "",
@@ -152,7 +153,7 @@ export function renderBrief(audit, doc) {
   lines.push("", "## Fixes", "");
   if (!audit.findings.length) lines.push("None from public pages. A test with a real agent is the next step: `npx @tansohq/agent-ready test --check` shows the plan for free, `npx @tansohq/agent-ready test` runs it.");
   for (const f of audit.findings) lines.push(`${f.n}. **${f.title}** (${f.severity}, ${f.name}). Prompt: prompts/${f.file}`);
-  lines.push("", "## What this audit cannot show", "", ...audit.limits.map((l) => `- ${l}`), "- payment, KYC and claim decisions by a real person were not tested", "");
+  lines.push("", "## What this check cannot show", "", ...audit.limits.map((l) => `- ${l}`), "- payment, KYC and claim decisions by a real person were not tested", "");
   return lines.join("\n");
 }
 

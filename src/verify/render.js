@@ -33,7 +33,8 @@ export function renderVerify({ host, task, result, verdict, folder, promptFile }
   const execution = result.execution || {};
   const cost = typeof execution.costUsd === "number" ? ` · $${execution.costUsd.toFixed(2)}` : "";
   out.push(`  ${style.dim(`${execution.turns ?? "?"} turns${cost} · evidence in ${folder}/`)}`);
-  if (promptFile) out.push("", `  ${style.bold("Next")}  paste ${promptFile} into your coding agent,`, `        then run ${style.bold("npx @tansohq/agent-ready test")} again`);
+  if (promptFile) out.push("", `  ${style.bold("Next")}  paste ${promptFile} into your coding agent,`, `        then deploy, run ${style.bold(`npx @tansohq/agent-ready check ${host}`)} again,`, "        and test again");
+  else if (verdict.outcome === "passed" || verdict.outcome === "handoff") out.push("", ...wrap("Keep it passing: app.tansohq.com runs this test on a schedule and emails you when it breaks (5 free runs a month).", 76).map((l) => `  ${style.dim(l)}`));
   out.push("");
   return out;
 }
@@ -61,6 +62,7 @@ export function renderPlan(plan, style) {
   out.push("");
   if (plan.ready) out.push(`  ${style.bold(style.green("READY"))}  Nothing ran. Start the agent with ${style.bold("npx @tansohq/agent-ready test")}`);
   else out.push(`  ${style.bold(style.red("NOT READY"))}  ${plan.claudeCode.hint}`);
+  for (const warning of plan.warnings || []) for (const line of wrap(warning, 76)) out.push(`  ${style.yellow(line)}`);
   out.push(`  ${style.dim("A host the agent needs is missing? Add it to verify_hosts in agent-ready.yml.")}`, "");
   return out;
 }

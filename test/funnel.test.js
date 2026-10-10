@@ -23,7 +23,7 @@ test("a product with no agent signup stops at Sign up and says what to build", (
   const signup = f.steps.find((s) => s.id === "signup");
   assert.equal(signup.state, "needs_person");
   assert.match(signup.fix, /one API call/);
-  assert.equal(f.headline, `Your public pages document ${f.documented} of 7 steps. None is verified yet: a test runs a real agent.`);
+  assert.equal(f.headline, `Your public pages document ${f.documented} of 7 steps. No step has been tested yet: a test runs a real agent.`);
   assert.equal(f.verified, 0);
   assert.equal(f.passed, 2, "passed still counts the steps before the first stop");
   assert.equal(f.stepsPassing, f.documented + f.verified);
@@ -49,7 +49,7 @@ test("steps public evidence cannot prove are not checked, and never count as a s
   const f = buildFunnel(doc({ pricing: { agentCanDetermineCost: verdict("yes"), ambiguities: [], plans: [{ id: "free", amount: 0 }] }, onboarding: { patterns: [{ id: "agent_is_customer", name: "Agent is the customer", status: "documented", needs: [] }] } }));
   assert.equal(f.steps.find((s) => s.id === "manage").state, "not_checked");
   assert.equal(f.stopsAt, null);
-  assert.match(f.headline, /^Your public pages document \d of 7 steps\. None is verified yet/);
+  assert.match(f.headline, /^Your public pages document \d of 7 steps\. No step has been tested yet/);
 });
 
 test("robots.txt that blocks AI agents stops the funnel at Discover", () => {

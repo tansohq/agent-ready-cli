@@ -3,7 +3,7 @@
 
 export function makeStyle(enabled) {
   const wrap = (code) => (s) => (enabled ? `\x1b[${code}m${s}\x1b[0m` : String(s));
-  return { bold: wrap("1"), dim: wrap("2"), green: wrap("32"), red: wrap("31") };
+  return { bold: wrap("1"), dim: wrap("2"), green: wrap("32"), red: wrap("31"), yellow: wrap("33") };
 }
 
 const PASSING = new Set(["agent_did", "agent_can", "handoff"]);
@@ -71,7 +71,7 @@ export function renderSummary(audit, paths, style, relative, savedTo) {
       const high = f.severity === "high" ? `  ${style.red("high")}` : "";
       out.push(`    ${style.bold(String(f.n).padStart(2, "0"))}  ${f.name.padEnd(10)}${f.title}${high}`);
     }
-    out.push("", `  ${style.bold("Next")}  paste this prompt into your coding agent:`, `        ${relative(paths.promptsDir)}/${audit.findings[0].file}`, `        then run ${style.bold(`npx @tansohq/agent-ready check ${audit.target.host}`)} again`);
+    out.push("", `  ${style.bold("Fix")}   paste this prompt into your coding agent:`, `        ${relative(paths.promptsDir)}/${audit.findings[0].file}`, `        then run ${style.bold(`npx @tansohq/agent-ready check ${audit.target.host}`)} again`);
   }
   out.push("", `  ${style.dim(`Folder  ${relative(paths.folder)}/`)}`, `  ${style.dim(`        ${audit.findings.length ? "prompts/ for the fixes · " : ""}brief.md for security, legal, billing`)}`, "");
   return out;

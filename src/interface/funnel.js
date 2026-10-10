@@ -17,8 +17,8 @@ export const STEP_NAME = {
   understand: "Understand",
   signup: "Sign up",
   access: "Access",
-  pay: "Pay",
   use: "Use",
+  pay: "Pay",
   manage: "Manage",
 };
 
@@ -206,7 +206,7 @@ function summarize(steps) {
 }
 
 function headlineFor(steps, documented, verified) {
-  if (!steps.some((x) => x.live)) return `Your public pages document ${documented} of ${steps.length} steps. None is verified yet: a test runs a real agent.`;
+  if (!steps.some((x) => x.live)) return `Your public pages document ${documented} of ${steps.length} steps. No step has been tested yet: a test runs a real agent.`;
   const failed = steps.filter((x) => x.live && x.state === "blocked").map((x) => x.name);
   const parts = [`${verified} of ${steps.length} steps verified by a test.`];
   if (documented) parts.push(`Your public pages document ${documented} more.`);

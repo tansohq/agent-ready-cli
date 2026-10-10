@@ -1,5 +1,5 @@
 // One fix prompt per finding, written for a coding agent (Claude Code, Cursor) working in the product's own repo.
-// Each prompt says why (the audit's evidence), what to build for the chosen onboarding model, the security rules,
+// Each prompt says why (the check's evidence), what to build for the chosen onboarding model, the security rules,
 // and acceptance tests the coding agent writes and makes pass. agent-ready never writes the product's code.
 
 const AI_AGENTS = "GPTBot, ClaudeBot, Claude-User, PerplexityBot, Google-Extended";
@@ -27,7 +27,7 @@ function whySection(finding, doc) {
 
 function modelSection(pattern, answers) {
   const rule = HUMAN_RULE[answers?.human_before?.value];
-  return ["## Onboarding model", `${pattern.name}. A person steps in: ${pattern.humanBoundary}`, ...(rule ? [rule] : []), "Chosen in agent-ready.yml. If this is wrong, change it there and rerun the audit."].join("\n");
+  return ["## Onboarding model", `${pattern.name}. A person steps in: ${pattern.humanBoundary}`, ...(rule ? [rule] : []), "Chosen in agent-ready.yml. If this is wrong, change it there and run the check again."].join("\n");
 }
 
 function list(title, items) {
@@ -39,7 +39,7 @@ function numbered(title, items) {
 }
 
 function closing(url, extra) {
-  return ["## When done", `Run \`npx @tansohq/agent-ready check ${url}\` again. This finding should be gone.${extra ? ` ${extra}` : ""} A static audit shows the path is documented; only a real agent run shows it works.`].join("\n");
+  return ["## When done", `Run \`npx @tansohq/agent-ready check ${url}\` again. This finding should be gone.${extra ? ` ${extra}` : ""} A check shows the path is documented; only a real agent run shows it works.`].join("\n");
 }
 
 const RATE_LIMIT = "Rate-limit by client IP and globally per hour. Take the client IP from the socket or from a proxy that overwrites X-Forwarded-For; never trust a client-appended X-Forwarded-For.";
@@ -111,7 +111,7 @@ function agentIdBuild(answers) {
   const outbound = answers.human_before.value === "outbound";
   return {
     title: "Let agents sign up with AgentID",
-    checkFirst: "## Check first\nThe audit did not find a way for an agent to sign up on its own in the public pages. That does not mean there is none. Search the repo for how people sign in today: Clerk, Auth0, Supabase Auth, Better Auth, Auth.js, or the app's own OpenID Connect client. AgentID is added to that sign-in, not beside it as a second auth system. If agents can already sign up some other way, document that path in /auth.md and /llms.txt instead.",
+    checkFirst: "## Check first\nThe check did not find a way for an agent to sign up on its own in the public pages. That does not mean there is none. Search the repo for how people sign in today: Clerk, Auth0, Supabase Auth, Better Auth, Auth.js, or the app's own OpenID Connect client. AgentID is added to that sign-in, not beside it as a second auth system. If agents can already sign up some other way, document that path in /auth.md and /llms.txt instead.",
     intro: "## About AgentID\nAgentID is AgentMail's OpenID Connect provider for agents (issuer https://auth.agentid.com). An agent signs in as itself with its AgentMail inbox, the way a person uses a social sign-in. It is free for apps. The agent needs an AgentMail inbox, an AgentMail API key, and a browser (headless works); with no browser, its owner completes the sign-in in the AgentMail console. The app's registration needs a person to approve it once in a browser. AgentID launched on 2026-10-06, so check its current docs at https://www.agentid.com/llms-full.txt before you start.",
     build: [
       "Register the app: a person with an AgentMail account runs `npx @agentmail/agentid-cli init` (Node.js 20 or later) from the repo root. It detects the auth provider, registers the app, writes the provider configuration and verifies it, but leaves AgentID sign-in turned off until someone turns it on. Registration opens a browser for the AgentMail organization to approve; stop and ask a person for this step. Then turn the AgentID connection on, and run `npx @agentmail/agentid-cli doctor` to check the setup.",
@@ -147,14 +147,14 @@ function agentIdBuild(answers) {
       "The signed-in agent can get an API key, and the key authenticates a read call.",
       "The API key never appears in logs.",
     ],
-    other: "## Another option\nIf agents should act for a person rather than as themselves, an OAuth device authorization flow (RFC 8628) on the existing login lets a person approve a scoped token for the agent, with no AgentMail inbox needed. To get that prompt, set `onboarding: existing_account` in agent-ready.yml and rerun the audit.",
+    other: "## Another option\nIf agents should act for a person rather than as themselves, an OAuth device authorization flow (RFC 8628) on the existing login lets a person approve a scoped token for the agent, with no AgentMail inbox needed. To get that prompt, set `onboarding: existing_account` in agent-ready.yml and run the check again.",
     closingExtra: `\`check\` recognizes "Sign in with AgentID" on the product's own pages, such as the sentence "${AGENTID_DOC_SENTENCE}" in /auth.md or /llms.txt, and Sign up then names AgentID.`,
   };
 }
 
 // For agent-first models that build their own signup endpoint: AgentID is a shorter path when the product already has
 // an OpenID Connect sign-in. Never the only path, and its costs said plainly.
-const AGENTID_OTHER = "## Another option\nIf the product already has an OpenID Connect sign-in (Clerk, Auth0, Supabase, Better Auth, Auth.js, or its own), it can accept AgentID instead of building the signup endpoint above. AgentID is AgentMail's OpenID Connect provider for agents (issuer https://auth.agentid.com), free for apps; `npx @agentmail/agentid-cli init` sets it up. The tradeoffs: the agent needs an AgentMail inbox and key, so an agent without one cannot use this path; a person approves the app's registration once in a browser; and AgentID is new (launched 2026-10-06). To get that prompt instead, set `onboarding: agent_identity` in agent-ready.yml and rerun the audit.";
+const AGENTID_OTHER = "## Another option\nIf the product already has an OpenID Connect sign-in (Clerk, Auth0, Supabase, Better Auth, Auth.js, or its own), it can accept AgentID instead of building the signup endpoint above. AgentID is AgentMail's OpenID Connect provider for agents (issuer https://auth.agentid.com), free for apps; `npx @agentmail/agentid-cli init` sets it up. The tradeoffs: the agent needs an AgentMail inbox and key, so an agent without one cannot use this path; a person approves the app's registration once in a browser; and AgentID is new (launched 2026-10-06). To get that prompt instead, set `onboarding: agent_identity` in agent-ready.yml and run the check again.";
 
 function signupBuild(pattern, answers) {
   const highAbuse = answers.abuse_cost.value === "high";
@@ -271,10 +271,10 @@ function payBuild(pattern) {
   };
 }
 
-// A static audit can miss a path that exists: Moltbook lets an agent sign up, but its public pages did not show it.
+// A check can miss a path that exists: Moltbook lets an agent sign up, but its public pages did not show it.
 // Before building, the coding agent checks for an existing path and documents it instead of building a second one.
 const CHECK_FIRST = {
-  signup: "## Check first\nThe audit did not find an agent signup path in the public pages. That does not mean there is none. Search the repo for an existing signup or registration endpoint an agent could call. If one exists, document it in /auth.md and /llms.txt instead of building the endpoints below.",
+  signup: "## Check first\nThe check did not find an agent signup path in the public pages. That does not mean there is none. Search the repo for an existing signup or registration endpoint an agent could call. If one exists, document it in /auth.md and /llms.txt instead of building the endpoints below.",
   access: "## Check first\nSearch the repo for how API keys are issued today. If an agent can already get one, document that path in /auth.md instead of building a new one.",
 };
 

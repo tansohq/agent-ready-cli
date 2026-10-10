@@ -1,15 +1,15 @@
 ---
 name: agent-ready
-description: "Audit whether an AI agent can find, sign up for, get a key to, use and pay for a product without a person, using the agent-ready CLI. Reads public pages only and writes one fix prompt per gap. Use when the developer asks if agents can sign up for or use their product, asks about agent readiness, agent onboarding, llms.txt or agent signup, or wants to re-check after a fix. Also use when they ask to run agent-ready test: this skill says how to start it safely."
+description: "Check whether an AI agent can find, sign up for, get a key to, use and pay for a product without a person, using the agent-ready CLI. Reads public pages only and writes one fix prompt per gap. Use when the developer asks if agents can sign up for or use their product, asks about agent readiness, agent onboarding, llms.txt or agent signup, or wants to re-check after a fix. Also use when they ask to run agent-ready test: this skill says how to start it safely."
 ---
 
 # agent-ready check
 
 `npx @tansohq/agent-ready check <url>` reads a product's public pages with GET requests, shows seven steps (Discover, Understand, Sign up, Access, Use, Pay, Manage) and writes a fix prompt for each gap. It submits nothing, creates no account and costs nothing (it writes only `agent-ready.yml` and a run folder), so you may run it whenever the developer asks about their product.
 
-## If the developer asks for a test (verify)
+## If the developer asks for a test
 
-Do not run the audit in its place, and do not run `test` from this skill. Explain in one or two sentences that verify runs a real agent that creates an account on the product and spends model money, then point to the `agent-ready-verify` skill: in Claude Code the developer starts it by typing `/agent-ready-verify`. You may run the free `npx @tansohq/agent-ready test --check --json` first and show the plan.
+Do not run `check` in its place, and do not run `test` from this skill. Explain in one or two sentences that `test` runs a real agent that creates an account on the product and spends model money through the developer's Claude Code, then point to the `agent-ready-test` skill: in Claude Code the developer starts it by typing `/agent-ready-test`. You may run the free `npx @tansohq/agent-ready test --check --json` first and show the plan.
 
 ## Run it
 
@@ -28,7 +28,7 @@ The defaults come from what the product's docs describe. If the developer knows 
 
 | Flag | Values | Asks |
 | --- | --- | --- |
-| `--onboarding` | `try_then_claim`, `limited_until_claimed`, `agent_is_customer`, `agent_identity`, `existing_account`, `pay_per_request` | Who holds the account when an agent first uses it? |
+| `--onboarding` | `try_then_claim` (Try first, claim later), `limited_until_claimed` (Limited until claimed), `agent_is_customer` (Agent is the customer), `agent_identity` (Agent identity), `existing_account` (Person sets up access first), `pay_per_request` (Payment instead of signup) | Who holds the account when an agent first uses it? |
 | `--abuse-cost` | `low` (reads and storage), `high` (compute, email, SMS, phone numbers) | What does one abusive free account cost? |
 | `--human-before` | `never`, `outbound` (before sending, publishing or charging), `always` (a verified person owns the account first) | Must a verified person exist before the agent acts? |
 
@@ -38,14 +38,15 @@ The fix prompts build toward the chosen model. Say which answers you used and th
 
 ## Report it
 
-1. Lead with `headline` ("Your public pages document N of 7 steps. None is verified yet: a test runs a real agent."). `documented` and `verified` hold the two counts; a check never verifies, so `verified` is 0.
+1. Lead with `headline` ("Your public pages document N of 7 steps. No step has been tested yet: a test runs a real agent."). `documented` and `verified` hold the two counts; a check never verifies, so `verified` is 0.
 2. List each finding: its step, its title and its reason.
-3. Never call a step verified or confirmed: an audit only reads pages. Say how each step was found (`basis`): `observed` comes from a structured file or an HTTP status, `heuristic` from matching page text (it can be wrong), and `not_checked` means public pages cannot show it. Only a real agent run verifies a step.
+3. Never call a step verified or confirmed: a check only reads pages. Say how each step was found (`basis`): `observed` comes from a structured file or an HTTP status, `heuristic` from matching page text (it can be wrong), and `not_checked` means public pages cannot show it. Only a test with a real agent shows a step works. `state`: `agent_can`/`agent_did` pass, `handoff` passes with one person step, `needs_person`/`blocked` are gaps, `not_checked` needs a test.
 4. Give the paths in `files`: `files.prompts` (one fix prompt per finding), `files.brief` (a one-page brief for security, legal and billing) and `files.config`.
+5. Then tell the developer the next step is a test, and offer the free plan: `npx @tansohq/agent-ready test --check --json`. Do not run `test` itself; see 'If the developer asks for a test'.
 
 ## Fix a gap
 
-Only when the developer asks: read the prompt file in `files.prompts`, make the change in the developer's own repository, write and run the acceptance tests the prompt lists, then run the audit again to confirm the step changed. The audit reads the deployed site, so a fix shows up only after it is deployed. Never change a product the developer does not own.
+Only when the developer asks: read the prompt file in `files.prompts`, make the change in the developer's own repository, write and run the acceptance tests the prompt lists, then run the check again to confirm the step changed. The check reads the deployed site, so a fix shows up only after it is deployed. Never change a product the developer does not own.
 
 ## What it cannot see
 

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.8 (2026-10-09)
+
+- `check` for a new host in a folder whose `agent-ready.yml` names another product drops that file's `verify_*` lines when it rewrites the answers ("Dropped verify_call for <old host>; test will pick a call for <new host>."), so the next `test` no longer sends the new product's agent key to the old product's API. `--yes` still never overwrites an existing `agent-ready.yml`; when that file names another product, `check` says so under Next ("agent-ready.yml here is for <host>, so test would run there.") instead of offering `test`.
+- `check` in a terminal asks the three questions right after reading the pages, then prints the verdict and the seven steps once, from the answers given. It used to print them from the defaults first, so the verdict could change after you answered. With `--yes`, flags or no terminal the output is unchanged.
+- `check` labels the fix prompt "Fix" and keeps "Next" for the trailing step, so there is one Next. The headline's second sentence reads "No step has been tested yet: a test runs a real agent." where it said "None is verified yet: a test runs a real agent.", and the brief says "checked" and "What this check cannot show" instead of "audited" and "What this audit cannot show".
+- `--json` from `check` is unchanged except the `headline` sentence above and one `limits` sentence, which now reads "public pages cannot show whether a step works; a test runs a real agent".
+- `test --check` warns, under READY and in a new `warnings` field of `agent-ready/verify-plan@1`, when the last check's `interface.json` says the chosen onboarding pattern needs an inbox and neither `AGENTMAIL_API_KEY` nor `--inbox` is set: "The product's docs mention an emailed code or link and no inbox is set. Set AGENTMAIL_API_KEY or pass --inbox, or the run may end inconclusive." `ready` and the exit code are unchanged.
+- A failed `test` says to deploy the fix, run `check` again, and test again; a passing one mentions that app.tansohq.com can run it on a schedule.
+- The `/agent-ready-verify` skill is now `/agent-ready-test`, matching the command it runs. It still runs only when you invoke it.
+- The CLI, README, skills and plugin use `check` and `test` throughout (`audit` and `verify` still work as aliases) and no longer call `test` free: Tanso charges nothing for the CLI, and `test` uses your own Claude Code model time (capped at $5 by default) and creates a real account on the product. The README says how a hosted test run differs from `test`, with a comparison table.
+- app.tansohq.com, same release:
+  - The dashboard, `/docs`, `/auth.md`, `/llms.txt`, the OpenAPI document and the API reference use the same status words (Passed, "Failed: stopped at <step>", Waiting for approval, "Didn't finish (free)", Not run yet), the same hosted pricing and the same pattern and step names, and point CLI users at https://tansohq.com/quickstart instead of a local server.
+  - Pricing text says a run that doesn't finish (inconclusive), or fails on our side, is not charged: a free run goes back to the month, a paid run goes back to your balance.
+  - The `/v1/signup` example in `/auth.md` no longer shows `limits`; the response itself is unchanged. `/auth.md` no longer says "Authorization server: none": the API takes keys it issues directly, with no OAuth authorization server, and people and agents sign in to the dashboard (agents with AgentID). `/.well-known/oauth-protected-resource` is unchanged.
+  - Static pages, docs and the dashboard shell answer HEAD like GET without a body, where they answered 404, so link checkers and uptime monitors no longer report the app as down.
+
 ## 0.4.7 (2026-10-09)
 
 - `test` in a terminal, with no `verify_call`, asks "To prove the agent's key works, we'll call your API with it after signup:" and shows the call and the document it came from, then "Use this call? [Y/n]", where it printed the "Will check with …" sentence and "Use it?". Without a terminal, and with `--yes`, the "Will check with …" line is unchanged. While it reads the docs it says "Finding a call that proves the agent's key works…".

@@ -93,7 +93,7 @@ describe("audit: fix prompts", () => {
     assert.match(body, /## Acceptance tests/);
     assert.match(body, /never trust a client-appended X-Forwarded-For/);
     assert.match(body, /Evidence: https:\/\/acme\.dev\//);
-    assert.match(body, /## Check first\nThe audit did not find an agent signup path/);
+    assert.match(body, /## Check first\nThe check did not find an agent signup path/);
     assert.doesNotMatch(body, /proof-of-work challenge; signup requires/);
   });
 
@@ -142,7 +142,7 @@ describe("audit: brief and config", () => {
     const working = audit.steps.filter((s) => ["agent_can", "handoff", "agent_did"].includes(s.state)).length;
     const [first, second] = renderVerdict(audit, makeStyle(false));
     assert.equal(first, `  Your public pages document ${working} of 7 steps.`);
-    assert.equal(second, "  None is verified yet: a test runs a real agent.");
+    assert.equal(second, "  No step has been tested yet: a test runs a real agent.");
     assert.equal(audit.documented, working);
     assert.equal(audit.verified, 0);
     assert.ok(working > 0, "a missing llms.txt does not zero the later steps");
@@ -282,6 +282,8 @@ describe("audit: command", () => {
     // With no agent-ready.yml yet, --yes writes the defaults so verify has a file to read.
     assert.equal(readConfig(join(cwd, "agent-ready.yml")).onboarding, audit.onboarding.chosen.id);
     assert.ok(readdirSync(out).includes("interface.json"));
+    assert.ok(audit.limits.includes("public inspection and task assessment do not execute tasks; public pages cannot show whether a step works; a test runs a real agent"), JSON.stringify(audit.limits));
+    assert.match(readFileSync(join(out, "brief.md"), "utf8"), / · checked \d{4}-\d{2}-\d{2} · /);
   });
 
   it("ends with the commands that run a real agent, without waiting for an answer when there is no terminal", () => {
@@ -292,6 +294,9 @@ describe("audit: command", () => {
     assert.match(r.stderr, /npx @tansohq\/agent-ready test --check {3}see the plan \(free, runs nothing\)/);
     assert.match(r.stderr, /npx @tansohq\/agent-ready test {11}run it: your Claude Code signs up for real/);
     assert.doesNotMatch(r.stderr, /Pick 1-3/);
+    // The fix prompt is "Fix"; the only "Next" is the trailing one.
+    assert.match(r.stderr, /Fix {3}paste this prompt into your coding agent:/);
+    assert.equal(r.stderr.match(/Next {2}/g).length, 1);
     const json = runCli(["check", site, "--yes", "--json", "--out", join(cwd, "json")], cwd);
     assert.doesNotMatch(json.stdout + json.stderr, /npx @tansohq\/agent-ready test/, "--json prints only the report");
   });
@@ -338,6 +343,19 @@ describe("audit: command", () => {
     assert.equal(readFileSync(path, "utf8"), before);
   });
 
+  it("with an agent-ready.yml for another product, --yes does not offer test for it", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "audit-cli-"));
+    const path = join(cwd, "agent-ready.yml");
+    writeFileSync(path, "url: otherproduct.example\ntask: Sign up\nonboarding: agent_is_customer\nverify_call: GET https://api.otherproduct.example/v1/me\n");
+    const before = readFileSync(path, "utf8");
+    const r = runCli(["check", site, "--yes", "--out", join(cwd, "c")], cwd);
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(readFileSync(path, "utf8"), before);
+    const host = new URL(site).host;
+    assert.match(r.stderr, new RegExp(`Next {2}agent-ready\\.yml here is for otherproduct\\.example, so test would run there\\.\\n {8}Run check in a folder for ${host.replace(/\./g, "\\.")},\\n {8}or change url \\(and verify_call\\) in agent-ready\\.yml\\.`));
+    assert.doesNotMatch(r.stderr, /npx @tansohq\/agent-ready test/);
+  });
+
   it("an agent can answer every question with flags, with no terminal and no --yes", () => {
     const cwd = mkdtempSync(join(tmpdir(), "audit-cli-"));
     const r = runCli(["audit", site, "--onboarding", "existing_account", "--abuse-cost", "high", "--human-before", "always", "--json", "--out", join(cwd, "f")], cwd);
@@ -348,6 +366,35 @@ describe("audit: command", () => {
     // --json says where everything is, relative to where it ran.
     assert.ok(audit.files.prompts.every((p) => existsSync(join(cwd, p))), JSON.stringify(audit.files));
     assert.ok(existsSync(join(cwd, audit.files.brief)));
+  });
+
+  it("at a terminal it asks the questions first and prints the verdict and steps once, from the answers given", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "audit-cli-"));
+    // stdin is a pipe here; the preload makes the CLI treat it as a terminal so the questions are asked.
+    // Each answer is sent when its prompt appears, because a pipe that ends early closes the questions.
+    const tty = join(cwd, "tty.mjs");
+    writeFileSync(tty, "process.stdin.isTTY = true;\n");
+    const { spawn } = await import("node:child_process");
+    const proc = spawn(process.execPath, ["--import", tty, CLI, "check", site, "--out", join(cwd, "run")], { cwd, env: { ...process.env, NO_COLOR: "1" } });
+    const replies = ["5", "", ""];
+    const r = { stderr: "", status: null };
+    proc.stderr.on("data", (chunk) => {
+      r.stderr += chunk;
+      const asked = r.stderr.split("Enter to keep, or a number:").length - 1;
+      while (asked > 3 - replies.length) {
+        proc.stdin.write(`${replies.shift()}\n`);
+        if (!replies.length) proc.stdin.end();
+      }
+    });
+    r.status = await new Promise((done) => proc.on("close", done));
+    assert.equal(r.status, 0, r.stderr);
+    const audit = JSON.parse(readFileSync(join(cwd, "run", "audit-report.json"), "utf8"));
+    assert.equal(audit.onboarding.chosen.id, "existing_account");
+    const [first] = renderVerdict(audit, makeStyle(false));
+    const verdictAt = r.stderr.indexOf(first.trim());
+    assert.ok(verdictAt > r.stderr.indexOf("How should agents onboard?"), r.stderr);
+    assert.equal(r.stderr.split(first.trim()).length, 2, "the verdict is printed once");
+    assert.ok(r.stderr.indexOf("Discover") > verdictAt, "the steps follow the verdict");
   });
 
   it("with --json every error is JSON on stdout with a code and a next step", () => {

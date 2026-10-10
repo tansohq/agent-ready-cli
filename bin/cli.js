@@ -22,12 +22,12 @@ import { buildInterface } from "../src/interface/index.js";
 import { validateInterface } from "../src/interface/schema.js";
 import { runHarness, TASKS } from "../src/harness/index.js";
 import { inspect, buildAudit, writeAudit, parseTarget, unreachableReason, DEFAULT_TASK } from "../src/audit/index.js";
-import { defaultAnswers, askQuestions, QUESTIONS, HOLDER_OPTIONS } from "../src/audit/questions.js";
-import { readConfig, writeConfig, writeVerifyCall, CONFIG_FILE } from "../src/audit/config.js";
+import { defaultAnswers, askQuestions, QUESTIONS } from "../src/audit/questions.js";
+import { readConfig, writeConfig, writeVerifyCall, configHost, CONFIG_FILE } from "../src/audit/config.js";
 import { makeStyle, renderVerdict, renderSteps, renderSummary } from "../src/audit/render.js";
 import { parseVerifySpec, buildVerifyTask, classify, failedStep, networkFor, describeSpec } from "../src/verify/index.js";
 import { renderVerify, renderPlan } from "../src/verify/render.js";
-import { inferVerifyCall } from "../src/verify/infer.js";
+import { inferVerifyCall, latestInterface } from "../src/verify/infer.js";
 import { renderPrompt } from "../src/audit/prompts.js";
 import { patternInfo } from "../src/audit/index.js";
 import { createInterface } from "node:readline/promises";
@@ -43,7 +43,7 @@ const frameSize = (value) => {
 };
 
 const program = new Command();
-program.name("agent-ready").description("Can an AI agent find, sign up, pay for, and use your product without a human?").version(pkg.version);
+program.name("agent-ready").description("Can an AI agent find, sign up for, use and pay for your product without a person?").version(pkg.version);
 
 function parseClaims(value) {
   const on = value.split(",").map((s) => s.trim()).filter(Boolean);
@@ -79,7 +79,7 @@ program
   .option("-y, --yes", "accept the defaults without asking")
   .option("--ask", `ask again even if ${CONFIG_FILE} has answers`)
   .option("--task <text>", "what an agent should accomplish", DEFAULT_TASK)
-  .option("--onboarding <model>", `answer the first question: ${HOLDER_OPTIONS.map((o) => o.id).join(" | ")}`)
+  .option("--onboarding <model>", "answer the first question: try_then_claim (Try first, claim later) | limited_until_claimed (Limited until claimed) | agent_is_customer (Agent is the customer) | agent_identity (Agent identity) | existing_account (Person sets up access first) | pay_per_request (Payment instead of signup)")
   .option("--abuse-cost <cost>", "answer the second question: low | high")
   .option("--human-before <when>", "answer the third question: never | outbound | always")
   .option("--fail-on <level>", "exit 1 when a fix at this severity or above is found: high | medium")
@@ -110,7 +110,7 @@ Examples:
     const say = opts.json ? () => {} : (line = "") => console.error(line);
     const configPath = join(process.cwd(), CONFIG_FILE);
     const saved = readConfig(configPath);
-    const savedHere = saved && saved.url && new URL(saved.url.startsWith("http") ? saved.url : `https://${saved.url}`).host === host ? saved : null;
+    const savedHere = saved && saved.url && configHost(saved.url) === host ? saved : null;
     // Answering any question by flag means the caller is not a person at a terminal: the rest take their defaults.
     const interactive = Boolean(process.stdin.isTTY) && !opts.yes && !opts.json && !flagged && (!savedHere || opts.ask);
     if (!interactive && !opts.yes && !flagged && !savedHere) fail(opts, 2, "answers_required", `No answers for ${host}.`, `Run "agent-ready check ${host}" in a terminal to answer the questions, pass --yes for the defaults, or answer with --onboarding, --abuse-cost and --human-before.`);
@@ -133,11 +133,7 @@ Examples:
     }
     for (const [flag, key] of Object.entries(QUESTION_FLAGS)) if (opts[flag]) answers[key] = { value: opts[flag], source: "flag" };
     const task = opts.task !== DEFAULT_TASK ? opts.task : savedHere?.task || DEFAULT_TASK;
-    const preview = buildAudit({ doc, funnel, answers, task, runId: id, version: pkg.version });
-    say("");
-    for (const line of renderVerdict(preview, style)) say(line);
-    say("");
-    for (const line of renderSteps(preview, style)) say(line);
+    // The questions come before the verdict, so the verdict and steps are printed once, from the final answers.
     let savedTo = null;
     if (interactive) {
       say("");
@@ -150,8 +146,9 @@ Examples:
         say("  Cancelled. Nothing saved.");
         process.exit(130);
       }
-      writeConfig(configPath, { url: url.startsWith("https://") ? host : new URL(url).origin, task, answers });
+      const { droppedVerifyFor } = writeConfig(configPath, { url: url.startsWith("https://") ? host : new URL(url).origin, task, answers });
       savedTo = `saved to ${CONFIG_FILE}`;
+      if (droppedVerifyFor) say(`  ${style.dim(`Dropped verify_call for ${droppedVerifyFor}; test will pick a call for ${host}.`)}`);
     } else if (!saved) {
       // --yes with no agent-ready.yml yet writes the defaults, so verify has a file to read. It never overwrites one.
       writeConfig(configPath, { url: url.startsWith("https://") ? host : new URL(url).origin, task, answers });
@@ -159,6 +156,10 @@ Examples:
     }
 
     const audit = buildAudit({ doc, funnel, answers, task, runId: id, version: pkg.version });
+    say("");
+    for (const line of renderVerdict(audit, style)) say(line);
+    say("");
+    for (const line of renderSteps(audit, style)) say(line);
     const paths = writeAudit({ audit, doc, out });
     const rel = (p) => relative(process.cwd(), p) || ".";
     // Where everything is, so an agent can read the prompts and the brief next without guessing paths.
@@ -166,7 +167,15 @@ Examples:
     if (opts.json) process.stdout.write(JSON.stringify({ ...audit, files }, null, 2) + "\n");
     else for (const line of renderSummary(audit, paths, style, rel, savedTo)) say(line);
     if (opts.failOn && audit.findings.some((f) => FAIL_ON[opts.failOn].includes(f.severity))) process.exitCode = 1;
-    if (!opts.json) await offerTest({ audit, style, say, interactive: Boolean(process.stdin.isTTY && process.stderr.isTTY) && !opts.yes, hasConfig: existsSync(configPath) });
+    // An agent-ready.yml for another product is never overwritten here, so `test` would run against that product.
+    const after = readConfig(configPath);
+    const configFor = after?.url ? configHost(after.url) : null;
+    if (!opts.json && configFor && configFor !== host) {
+      say(`  ${style.bold("Next")}  ${CONFIG_FILE} here is for ${configFor}, so test would run there.`);
+      say(`        Run check in a folder for ${host},`);
+      say(`        or change url (and verify_call) in ${CONFIG_FILE}.`);
+      say("");
+    } else if (!opts.json) await offerTest({ audit, style, say, interactive: Boolean(process.stdin.isTTY && process.stderr.isTTY) && !opts.yes, hasConfig: existsSync(configPath) });
   });
 
 // check reads public pages; test has a real agent do the steps. A person at a terminal picks what to do next and
@@ -232,8 +241,8 @@ function claudeStatus() {
 program
   .command("test [url]")
   .alias("verify")
-  .description("Have a real agent try the task in agent-ready.yml on your product, then check its key with the call you declared, or one taken from its OpenAPI document. Creates an account on the product and uses your Claude Code.")
-  .option("-y, --yes", "skip the confirmation")
+  .description("Have a real agent try the task in agent-ready.yml on your product. The checker then calls your API with the agent's key, with no key and with a wrong key, using verify_call or a call from your OpenAPI document. Creates an account on the product and uses your Claude Code.")
+  .option("-y, --yes", "skip the confirmation and save an inferred verify_call to agent-ready.yml")
   .option("--inbox <address>", "an inbox you will relay mail from into the run's work/inbox/, for products that email a code")
   .option("--max-turns <n>", "agent turn budget", (v) => parseInt(v, 10), 40)
   .option("--max-budget-usd <usd>", "stop the agent once model use passes this many dollars (checked after each turn)", parseBudget, 5)
@@ -307,6 +316,10 @@ Examples:
         agent: { hosts: networkFor(url, spec), inbox, maxTurns: opts.maxTurns, maxBudgetUsd: opts.maxBudgetUsd, saves: ["AGENT_READY_KEY", ...spec.fields] },
         checker: { call: describeSpec(spec), calls: ["with the agent's key: must answer " + spec.expect, "with no key: must be refused (400, 401 or 403)", "with a wrong key: must be refused"], ...checker },
       };
+      // The onboarding pattern chosen in agent-ready.yml, as the last check's interface.json describes it.
+      const onboarding = latestInterface(process.cwd(), url)?.doc.onboarding;
+      const chosen = onboarding?.patterns?.find((p) => p.id === (config.onboarding || onboarding.primary));
+      if (chosen?.needs?.includes("inbox") && !process.env.AGENTMAIL_API_KEY && !opts.inbox) plan.warnings = ["The product's docs mention an emailed code or link and no inbox is set. Set AGENTMAIL_API_KEY or pass --inbox, or the run may end inconclusive."];
       if (opts.json) process.stdout.write(JSON.stringify(plan, null, 2) + "\n");
       else for (const line of renderPlan(plan, style)) console.error(line);
       process.exit(plan.ready ? 0 : 2);
@@ -363,13 +376,13 @@ Examples:
     process.exitCode = verdict.exitCode;
   });
 
-// 0.3 kept a Tanso workspace for verify runs. Test runs on your machine are free and need no account now; these
+// 0.3 kept a Tanso workspace for verify runs. check and test need no Tanso account now; these
 // commands stay so scripts written for 0.3 get a clear answer instead of "unknown command".
 for (const name of ["account", "login", "logout"]) {
   program
     .command(name, { hidden: true })
     .allowUnknownOption()
-    .action(() => console.error("  agent-ready no longer needs a Tanso account: check and test on your machine are free. Nothing to do."));
+    .action(() => console.error("  agent-ready no longer needs a Tanso account. check is free; test uses your own Claude Code. Nothing to do."));
 }
 
 program
@@ -445,7 +458,7 @@ program
 
 program
   .command("execute")
-  .description("Run one of the built-in example tasks against a public product with a real agent, as in examples/. For your own product, use `agent-ready test`.")
+  .description("Run one of the built-in example tasks against its public product with a real agent. Uses your Claude Code with no spending cap and does not ask first; --mode signup creates an account on that product. For your own product, use `agent-ready test`.")
   .requiredOption("--task <id>", `task id: ${Object.keys(TASKS).join(", ")}`)
   .option("--out <dir>", "run directory (default: .agent-ready/<host>/<runId>)")
   .option("--mode <mode>", "signup (agent obtains its own key as a synthetic persona; creates an account), given (key from env), none (stop at credential_required). Default: given if the key is set, else none")

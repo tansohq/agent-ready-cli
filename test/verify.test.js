@@ -410,6 +410,17 @@ describe("verify: output", () => {
     for (const line of lines) assert.ok([...line].length <= 80, line);
     assert.ok(lines.some((l) => l.includes("members/me")));
   });
+
+  it("after a pass it says how to keep it passing; after a fail it says to deploy, check and test again", () => {
+    const result = { evaluation: { checks: [{ id: "credential_acquired", pass: true }], objects: { checks: [{ label: "Key works", pass: true, detail: "200" }] } }, execution: { turns: 9, costUsd: 0.2 } };
+    const style = makeStyle(false);
+    const passed = renderVerify({ host: "example.com", task: "Sign up", result, verdict: { outcome: "passed", reason: "ok" }, folder: ".agent-ready/x", promptFile: null }, style);
+    assert.match(passed.join("\n"), /Keep it passing: app\.tansohq\.com runs this test on a schedule and emails you\s+when it breaks \(5 free runs a month\)\./);
+    const failed = renderVerify({ host: "example.com", task: "Sign up", result, verdict: { outcome: "failed", reason: "no" }, folder: ".agent-ready/x", promptFile: "prompts/01-signup.md" }, style);
+    assert.match(failed.join("\n"), /then deploy, run npx @tansohq\/agent-ready check example\.com again,\n {8}and test again/);
+    assert.doesNotMatch(failed.join("\n"), /Keep it passing/);
+    for (const line of [...passed, ...failed]) assert.ok([...line].length <= 80, line);
+  });
 });
 
 describe("verify: command", () => {
@@ -475,6 +486,25 @@ describe("verify: command", () => {
     assert.equal(existsSync(join(cwd, ".agent-ready")), false);
   });
 
+  it("--check warns when the chosen pattern needs an inbox and none is set, and stays ready", () => {
+    const { cwd, env } = checkIn(fakeClaude(true));
+    delete env.AGENTMAIL_API_KEY;
+    const run = join(cwd, ".agent-ready", "neon.com", "2026-10-09T00-00-00-aaaaaa");
+    mkdirSync(run, { recursive: true });
+    writeFileSync(join(run, "interface.json"), JSON.stringify({ onboarding: { primary: "try_then_claim", patterns: [{ id: "try_then_claim", needs: ["inbox"] }] } }));
+    const warning = "The product's docs mention an emailed code or link and no inbox is set. Set AGENTMAIL_API_KEY or pass --inbox, or the run may end inconclusive.";
+    const json = spawnSync(process.execPath, [CLI, "test", "--check", "--json"], { cwd, encoding: "utf8", env });
+    assert.equal(json.status, 0, json.stderr);
+    const plan = JSON.parse(json.stdout);
+    assert.equal(plan.ready, true);
+    assert.deepEqual(plan.warnings, [warning]);
+    const text = spawnSync(process.execPath, [CLI, "test", "--check"], { cwd, encoding: "utf8", env });
+    assert.equal(text.status, 0);
+    assert.match(text.stderr, /READY {2}Nothing ran\.[^\n]*\n {2}The product's docs mention an emailed code or link/);
+    const relayed = spawnSync(process.execPath, [CLI, "test", "--check", "--json", "--inbox", "me@example.com"], { cwd, encoding: "utf8", env });
+    assert.equal(JSON.parse(relayed.stdout).warnings, undefined);
+  });
+
   it("--check and a real run both stop when Claude Code is signed out", () => {
     const { cwd, env } = checkIn(fakeClaude(false));
     const check = spawnSync(process.execPath, [CLI, "verify", "--check"], { cwd, encoding: "utf8", env });
@@ -508,5 +538,21 @@ describe("verify: command", () => {
     assert.equal(config.onboarding, "agent_is_customer");
     assert.equal(config.verify_call, "GET https://api.acme.dev/v1/me");
     assert.equal(config.verify_assert, "id");
+  });
+
+  it("re-answering for another host drops the old product's verify lines, so its key never goes there", () => {
+    const cwd = mkdtempSync(join(tmpdir(), "verify-cli-"));
+    const path = join(cwd, "agent-ready.yml");
+    writeFileSync(path, "url: otherproduct.example\ntask: Sign up\nonboarding: try_then_claim\nverify_call: GET https://api.otherproduct.example/v1/me\nverify_header: Authorization: Bearer {key}\nverify_hosts: auth.otherproduct.example\n");
+    const answers = { onboarding: { value: "agent_is_customer" }, abuse_cost: { value: "low" }, human_before: { value: "never" } };
+    assert.deepEqual(writeConfig(path, { url: "acme.dev", task: "Sign up", answers }), { droppedVerifyFor: "otherproduct.example" });
+    const config = readConfig(path);
+    assert.equal(config.url, "acme.dev");
+    assert.ok(!Object.keys(config).some((k) => k.startsWith("verify_")), JSON.stringify(config));
+    assert.doesNotMatch(readFileSync(path, "utf8"), /otherproduct/);
+    // The same host, written as a URL, keeps them.
+    writeFileSync(path, "url: acme.dev\nverify_call: GET https://api.acme.dev/v1/me\n");
+    assert.deepEqual(writeConfig(path, { url: "https://acme.dev", task: "Sign up", answers }), { droppedVerifyFor: null });
+    assert.equal(readConfig(path).verify_call, "GET https://api.acme.dev/v1/me");
   });
 });

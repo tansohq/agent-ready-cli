@@ -5,7 +5,7 @@
   "plugins": [
     {
       "name": "agent-ready",
-      "description": "Audit whether agents can sign up for and use your product, and verify it with a real agent run.",
+      "description": "Check whether agents can sign up for and use your product, and test it with a real agent.",
       "source": "./",
       "category": "development"
     }
